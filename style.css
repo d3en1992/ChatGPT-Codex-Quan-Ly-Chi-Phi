@@ -318,6 +318,54 @@ select.cell-input {
 .cc-sum-row td { background: #f0ede8 !important; font-weight: 700; border-top: 2px solid var(--line2); }
 .cc-day-header { text-align: center !important; min-width: 44px; }
 
+/* Attendance grid: lock column widths so thead/tbody always align */
+.cc-grid-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.cc-grid-table th,
+.cc-grid-table td {
+  box-sizing: border-box;
+}
+.cc-grid-table .col-num { width: 32px; }
+.cc-grid-table .col-name {
+  width: 120px;
+  min-width: 110px;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-grid-table td.col-name .cc-name-input {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-grid-table .col-tp { width: 56px; }
+.cc-grid-table .col-day { width: 54px; }
+.cc-grid-table .col-tc { width: 60px; }
+.cc-grid-table .col-luong { width: 120px; }
+.cc-grid-table .col-total-luong { width: 120px; }
+.cc-grid-table .col-phucap { width: 110px; }
+.cc-grid-table .col-hdml { width: 120px; }
+.cc-grid-table .col-nd { width: 160px; }
+.cc-grid-table .col-total { width: 120px; }
+.cc-grid-table .col-del { width: 34px; }
+
+/* Keep last total column aligned while horizontal scrolling */
+.cc-grid-table th.cc-sticky-total,
+.cc-grid-table td.cc-sticky-total {
+  position: static;
+  right: auto;
+  z-index: 2;
+  background: #fff;
+}
+.cc-grid-table thead th.cc-sticky-total {
+  z-index: 5;
+  background: #c8870a;
+  color: #fff;
+}
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 3px; }
