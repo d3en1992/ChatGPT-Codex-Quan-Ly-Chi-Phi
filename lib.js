@@ -94,7 +94,9 @@ function mergeUnique(oldArr, newArr) {
   return [...map.values()];
 }
 
-// Write one localStorage key to IndexedDB (background, no throw)
+// Write one localStorage key to IndexedDB (background, no throw).
+// IMPORTANT: also deletes IDB records that are no longer in the array —
+// this is what propagates delete operations to IndexedDB.
 async function _dbSave(k, v) {
   const cfg = DB_KEY_MAP[k];
   if (!cfg) return;
@@ -105,19 +107,35 @@ async function _dbSave(k, v) {
       if (!r.updatedAt) r.updatedAt = now;
       return r;
     });
-    await db[cfg.table].bulkPut(records);
+    const newIdSet = new Set(records.map(r => r.id));
+    // Find IDB records that were removed from the array and delete them
+    const existing = await db[cfg.table].toArray();
+    const toDelete = existing.filter(r => !newIdSet.has(r.id)).map(r => r.id);
+    if (toDelete.length) await db[cfg.table].bulkDelete(toDelete);
+    if (records.length) await db[cfg.table].bulkPut(records);
   } else {
     await db[cfg.table].put({ id: cfg.catId, data: v, updatedAt: now });
   }
 }
 
-// Async preflight: sync IDB ↔ localStorage before app starts
-// If IDB has data → copy to localStorage (IDB wins)
-// If IDB empty → migrate localStorage → IDB
+// Async preflight: reconcile IDB ↔ localStorage before app starts.
+//
+// Four cases for each array table:
+//   A) lsRaw === null  (key never written, e.g. new device or browser cleared LS)
+//      → IDB wins: copy IDB rows to localStorage for recovery.
+//   B) lsRows is [] and idbRows has records  (all records intentionally deleted in LS)
+//      → LS wins: clear IDB to match the explicit empty state.
+//   C) idbRows is empty and lsRows has records  (first run, IDB never populated)
+//      → Migrate LS → IDB, ensuring every record has a stable id + updatedAt.
+//   D) Both have records  (normal ongoing use)
+//      → Merge by updatedAt (latest version wins).
+//        IDB-only records (absent from LS) are treated as stale deleted records
+//        UNLESS their updatedAt is newer than every LS record, which means they
+//        arrived from cloud sync after the last local write (keep them).
+//        After merge, bring IDB fully in sync (delete orphans, upsert changes).
 async function dbInit() {
   try {
     const now = Date.now();
-    // Array tables
     const tables = [
       { key: 'inv_v3',  table: db.invoices   },
       { key: 'cc_v2',   table: db.attendance  },
@@ -125,31 +143,77 @@ async function dbInit() {
       { key: 'ung_v1',  table: db.ung         },
       { key: 'thu_v1',  table: db.revenue     },
     ];
+
     for (const { key, table } of tables) {
       const idbRows = await table.toArray();
-      if (idbRows.length > 0) {
-        // IDB has data — update localStorage cache so synchronous load() sees it
-        localStorage.setItem(key, JSON.stringify(idbRows));
-      } else {
-        // IDB empty — migrate from localStorage
-        const lsRaw = localStorage.getItem(key);
-        if (lsRaw) {
-          try {
-            const lsRows = JSON.parse(lsRaw);
-            if (Array.isArray(lsRows) && lsRows.length > 0) {
-              const records = lsRows.map(r => {
-                if (!r.id) r.id = crypto.randomUUID();
-                if (!r.updatedAt) r.updatedAt = now;
-                return r;
-              });
-              await table.bulkPut(records);
-              localStorage.setItem(key, JSON.stringify(records));
-            }
-          } catch(e) { console.warn('[IDB] migrate lỗi', key, e); }
+      const lsRaw   = localStorage.getItem(key);
+
+      // ── Case A: localStorage key has never been set ─────────────
+      if (lsRaw === null) {
+        if (idbRows.length > 0) {
+          // Recover from IDB (cleared localStorage or new device with IDB backup)
+          localStorage.setItem(key, JSON.stringify(idbRows));
         }
+        continue;
       }
+
+      let lsRows = [];
+      try { lsRows = JSON.parse(lsRaw) || []; } catch { lsRows = []; }
+
+      // ── Case B: LS is explicitly empty, IDB still has stale rows ─
+      if (lsRows.length === 0 && idbRows.length > 0) {
+        // All records were intentionally deleted; purge IDB to match.
+        await table.clear();
+        continue;
+      }
+
+      // ── Case C: IDB never populated, LS has records → migrate ────
+      if (idbRows.length === 0 && lsRows.length > 0) {
+        const records = lsRows.map(r => ({
+          ...r,
+          id:        r.id        || crypto.randomUUID(),
+          updatedAt: r.updatedAt || now,
+        }));
+        await table.bulkPut(records);
+        localStorage.setItem(key, JSON.stringify(records));
+        continue;
+      }
+
+      // Both empty — nothing to do.
+      if (lsRows.length === 0 && idbRows.length === 0) continue;
+
+      // ── Case D: Both have records — merge with LS as authority ───
+      // High-water mark: the most recent updatedAt among all LS records.
+      // IDB records newer than this could be cloud arrivals (genuine new data).
+      // IDB records older than this that are absent from LS are deleted records.
+      const lsIdSet  = new Set(lsRows.map(r => r.id));
+      const lsMaxAt  = Math.max(0, ...lsRows.map(r => r.updatedAt || 0));
+
+      const idbToKeep = idbRows.filter(r =>
+        lsIdSet.has(r.id) ||                  // record exists in LS → merge decides version
+        (r.updatedAt || 0) > lsMaxAt          // newer than all LS records → cloud arrival
+      );
+
+      const merged = mergeUnique(lsRows, idbToKeep).map(r => ({
+        ...r,
+        id:        r.id        || crypto.randomUUID(),
+        updatedAt: r.updatedAt || now,
+      }));
+
+      // Write merged result to localStorage
+      localStorage.setItem(key, JSON.stringify(merged));
+
+      // Bring IDB fully in sync: delete orphans, upsert merged records
+      const mergedIdSet = new Set(merged.map(r => r.id));
+      const toDelete = idbRows.filter(r => !mergedIdSet.has(r.id)).map(r => r.id);
+      if (toDelete.length) await table.bulkDelete(toDelete);
+      await table.bulkPut(merged);
     }
-    // Category tables (stored as { id, data, updatedAt })
+
+    // ── Categories (simple arrays, no per-item timestamps) ──────────
+    // Rule: if IDB has data and LS key is absent → recover from IDB.
+    //       if LS has data and IDB is absent → migrate to IDB.
+    //       if both exist → LS wins (categories are always in sync via saveCats).
     const catMap = [
       { key: 'cat_ct',    catId: 'congTrinh'  },
       { key: 'cat_loai',  catId: 'loaiChiPhi' },
@@ -160,18 +224,20 @@ async function dbInit() {
     ];
     for (const { key, catId } of catMap) {
       const idbRec = await db.categories.get(catId);
-      if (idbRec) {
+      const lsRaw  = localStorage.getItem(key);
+      if (!lsRaw && idbRec) {
+        // LS absent → recover from IDB
         localStorage.setItem(key, JSON.stringify(idbRec.data));
-      } else {
-        const lsRaw = localStorage.getItem(key);
-        if (lsRaw) {
-          try {
-            const lsData = JSON.parse(lsRaw);
-            await db.categories.put({ id: catId, data: lsData, updatedAt: now });
-          } catch(e) { console.warn('[IDB] migrate cat lỗi', catId, e); }
-        }
+      } else if (lsRaw && !idbRec) {
+        // IDB absent → migrate from LS
+        try {
+          const lsData = JSON.parse(lsRaw);
+          await db.categories.put({ id: catId, data: lsData, updatedAt: now });
+        } catch(e) { console.warn('[IDB] migrate cat lỗi', catId, e); }
       }
+      // Both exist → LS is already up to date (saveCats keeps them in sync)
     }
+
     console.log('[IDB] dbInit hoàn tất');
   } catch(e) {
     console.warn('[IDB] dbInit lỗi:', e);
