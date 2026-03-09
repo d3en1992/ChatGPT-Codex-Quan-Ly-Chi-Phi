@@ -14,6 +14,8 @@ const CC_PG_TLT = 20;
 const CC_DAY_LABELS   = ['CN','T2','T3','T4','T5','T6','T7'];
 const CC_DATE_OFFSETS = [0,1,2,3,4,5,6]; // offset from Sunday (week starts Sunday)
 
+function round1(n){ return Math.round(n * 10) / 10; }
+
 // ─── date helpers ───────────────────────────────────────────────
 // Tuần: CN (Sun) → T7 (Sat). iso date string là YYYY-MM-DD.
 // Tránh timezone bug: dùng local date parts, không dùng toISOString cho date-only
@@ -287,6 +289,7 @@ function onCCMoneyKey(inp){
 function calcCCRow(tr){
   let tc=0;
   for(let i=0;i<7;i++) tc+=parseFloat(tr.querySelector(`[data-cc="d${i}"]`)?.value||0)||0;
+  tc=round1(tc);
   tr.querySelector('[data-cc="tc"]').textContent=tc||0;
   const luong=parseInt(tr.querySelector('[data-cc="luong"]')?.dataset?.raw||0)||0;
   const total=tc*luong;
@@ -328,8 +331,8 @@ function updateCCSumRow(){
     <td class="row-num col-num" style="font-size:10px;font-weight:700;color:var(--ink2)">∑</td>
     <td class="cc-sticky-name col-name" style="padding:7px 10px;font-size:10px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px">TỔNG</td>
     <td class="col-tp"></td>
-    ${dayT.map(v=>`<td class="col-day" style="text-align:center;${mono};font-size:12px;color:var(--ink2);padding:6px 4px">${v||''}</td>`).join('')}
-    <td class="col-tc" style="text-align:center;${mono};font-size:14px;color:var(--gold);padding:6px 8px">${tc}</td>
+    ${dayT.map(v=>`<td class="col-day" style="text-align:center;${mono};font-size:12px;color:var(--ink2);padding:6px 4px">${round1(v)||''}</td>`).join('')}
+    <td class="col-tc" style="text-align:center;${mono};font-size:14px;color:var(--gold);padding:6px 8px">${round1(tc)}</td>
     <td class="col-luong"></td>
     <td class="col-total-luong" style="text-align:right;${mono};font-size:13px;color:var(--green);padding:6px 8px;white-space:nowrap">${totalLuong>0?numFmt(totalLuong):'—'}</td>
     <td class="col-phucap" style="text-align:right;${mono};font-size:12px;color:var(--blue);padding:6px 8px;white-space:nowrap">${totalPC>0?numFmt(totalPC):'—'}</td>
@@ -339,7 +342,7 @@ function updateCCSumRow(){
     <td class="col-total cc-sticky-total" style="text-align:right;${mono};font-size:14px;color:var(--gold);padding:6px 8px;white-space:nowrap;background:#fff8e8">${totalTC>0?numFmt(totalTC):'—'}</td>
     <td class="col-del"></td>
   `;
-  document.getElementById('cc-sum-tc').textContent=tc;
+  document.getElementById('cc-sum-tc').textContent=round1(tc);
   document.getElementById('cc-sum-luong').textContent=fmtM(totalLuong);
   document.getElementById('cc-sum-tongcong').textContent=fmtM(totalTC);
 }
@@ -440,7 +443,7 @@ function saveCCWeek(){
   document.getElementById('cc-hist-week').value = fromDate;
   document.getElementById('cc-tlt-week').value  = fromDate;
   renderCCHistory();  // cập nhật bảng lịch sử và TLT sau khi lưu
-  const totalLuong=workers.reduce((s,wk)=>{ const tc=wk.d.reduce((a,v)=>a+v,0); return s+tc*(wk.luong||0)+(wk.phucap||0); },0);
+  const totalLuong=workers.reduce((s,wk)=>{ const tc=round1(wk.d.reduce((a,v)=>a+v,0)); return s+tc*(wk.luong||0)+(wk.phucap||0); },0);
   const hdCount=workers.filter(w=>w.hdmuale>0).length;
   const msg=`✅ Đã lưu ${viShort(fromDate)}–${viShort(toDate)} [${ct}]`
     +(hdCount?` · ${hdCount} HĐ lẻ`:'')
@@ -545,7 +548,7 @@ function renderCCHistory(){
       };
     }
     w.workers.forEach(wk=>{
-      const tc=wk.d.reduce((s,v)=>s+v,0);
+      const tc=round1(wk.d.reduce((s,v)=>s+v,0));
       const luong=Number(wk.luong)||0;
       const tl=tc*luong;
       const pc=wk.phucap||0;
@@ -561,6 +564,7 @@ function renderCCHistory(){
     });
     map[gKey].tongcong=map[gKey].tl+map[gKey].pc+map[gKey].hd;
   });
+  Object.values(map).forEach(r=>{ r.tc=round1(r.tc); r.d=r.d.map(v=>round1(v)); });
   let rows=Object.values(map).map(r=>{
     const avgLuong=r.luongList.length
       ? Math.round(r.luongList.reduce((s,v)=>s+v,0)/r.luongList.length)
@@ -637,7 +641,7 @@ function renderCCTLT(){
       if(!map[key]) map[key]={fromDate:w.fromDate,toDate:w.toDate,name:wk.name,
         d:[0,0,0,0,0,0,0],tc:0,tl:0,pc:0,hdml:0,tru:0,cts:[],luongList:[]};
       wk.d.forEach((v,i)=>{ map[key].d[i]+=v; });
-      const tc=wk.d.reduce((s,v)=>s+v,0);
+      const tc=round1(wk.d.reduce((s,v)=>s+v,0));
       map[key].tc+=tc;
       map[key].tl+=tc*(wk.luong||0);
       map[key].pc+=(wk.phucap||0);
@@ -649,6 +653,7 @@ function renderCCTLT(){
                 if(w.toDate>map[key].toDate) map[key].toDate=w.toDate; }
     });
   });
+  Object.values(map).forEach(r=>{ r.tc=round1(r.tc); r.d=r.d.map(v=>round1(v)); });
 
   const rows=Object.values(map).sort((a,b)=>
     fWk ? b.fromDate.localeCompare(a.fromDate)||a.name.localeCompare(b.name,'vi')
@@ -713,6 +718,9 @@ function renderCCTLT(){
       const noCon_=tongUng_-tongTruAll_;
       const noConStr_=noCon_>0?numFmt(noCon_)+' (nợ)':noCon_<0?numFmt(-noCon_)+' (dư)':'0';
       const noConColor_=noCon_>0?'var(--red)':noCon_<0?'var(--green)':'var(--ink3)';
+      const ctDisplay_=r.cts.length<=1
+        ? x(r.cts[0]||'—')
+        : x(r.cts[0])+` <span class="tlt-ct-more" title="${r.cts.map(c=>x(c)).join(', ')}">+${r.cts.length-1}</span>`;
       return `<tr
         data-name="${x(r.name)}" data-from="${r.fromDate}" data-to="${r.toDate}"
         data-tc="${r.tc}" data-tl="${r.tl}" data-pc="${r.pc}" data-hdml="${r.hdml}"
@@ -728,7 +736,7 @@ function renderCCTLT(){
         <td style="text-align:right;${mono};font-size:12px;color:var(--red)">${r.tru?numFmt(r.tru):'—'}</td>
         <td style="text-align:right;${mono};font-weight:700;color:var(--green);background:#f1f8f4">${thucLanh_>0?numFmt(thucLanh_):thucLanh_<0?'('+numFmt(-thucLanh_)+')':'—'}</td>
         <td style="text-align:right;${mono};font-size:12px;font-weight:${noCon_!==0?'700':'400'};color:${noConColor_}">${noConStr_}</td>
-        <td style="font-size:11px;color:var(--ink2);max-width:200px">${r.cts.map(c=>x(c)).join('<br>')}</td>
+        <td class="project-col" style="font-size:11px;color:var(--ink2)">${ctDisplay_}</td>
       </tr>`;
     }).join('');
   }
@@ -757,7 +765,7 @@ function exportCCTLTCSV(){
       if(!map[key]) map[key]={fromDate:w.fromDate,toDate:w.toDate,name:wk.name,
         d:[0,0,0,0,0,0,0],tc:0,tl:0,pc:0,hdml:0,tru:0,cts:[]};
       wk.d.forEach((v,i)=>{ map[key].d[i]+=v; });
-      const tc=wk.d.reduce((s,v)=>s+v,0);
+      const tc=round1(wk.d.reduce((s,v)=>s+v,0));
       map[key].tc+=tc; map[key].tl+=tc*(wk.luong||0);
       map[key].pc+=(wk.phucap||0); map[key].hdml+=(wk.hdmuale||0);
       map[key].tru+=(wk.tru||0);
@@ -766,6 +774,7 @@ function exportCCTLTCSV(){
                 if(w.toDate>map[key].toDate) map[key].toDate=w.toDate; }
     });
   });
+  Object.values(map).forEach(r=>{ r.tc=round1(r.tc); r.d=r.d.map(v=>round1(v)); });
   const rows=[['Tuần','Tên CN','CN','T2','T3','T4','T5','T6','T7','TC','TC Lương','Lương TB/Ngày','Trừ','Thực Lãnh','Nợ Còn','Công Trình']];
   Object.values(map).sort((a,b)=>fWk?b.fromDate.localeCompare(a.fromDate)||a.name.localeCompare(b.name,'vi'):a.name.localeCompare(b.name,'vi')).forEach(r=>{
     const tcL=r.tl+r.pc+r.hdml;  // consistent with TLT table
@@ -826,7 +835,7 @@ function exportCCWeekCSV(){
     const name=tr.querySelector('[data-cc="name"]')?.value?.trim()||'';
     if(!name) return;
     const d=[]; for(let i=0;i<7;i++) d.push(parseFloat(tr.querySelector(`[data-cc="d${i}"]`)?.value||0)||0);
-    const tc=d.reduce((s,v)=>s+v,0);
+    const tc=round1(d.reduce((s,v)=>s+v,0));
     const l=parseInt(tr.querySelector('[data-cc="luong"]')?.dataset?.raw||0)||0;
     const pc=parseInt(tr.querySelector('[data-cc="phucap"]')?.dataset?.raw||0)||0;
     const hd=parseInt(tr.querySelector('[data-cc="hdml"]')?.dataset?.raw||0)||0;
@@ -854,7 +863,7 @@ function exportCCHistCSV(){
       d:[0,0,0,0,0,0,0],tc:0,tl:0,pc:0,hd:0,luongList:[],names:[],ndList:[]
     };
     w.workers.forEach(wk=>{
-      const tc=wk.d.reduce((s,v)=>s+v,0);
+      const tc=round1(wk.d.reduce((s,v)=>s+v,0));
       const luong=Number(wk.luong)||0;
       wk.d.forEach((v,i)=>{ map[key].d[i]+=Number(v)||0; });
       map[key].tc+=tc;
@@ -866,6 +875,7 @@ function exportCCHistCSV(){
       if(wk.nd) map[key].ndList.push(wk.nd);
     });
   });
+  Object.values(map).forEach(r=>{ r.tc=round1(r.tc); r.d=r.d.map(v=>round1(v)); });
   Object.values(map)
     .map(r=>{
       const avgLuong=r.luongList.length?Math.round(r.luongList.reduce((s,v)=>s+v,0)/r.luongList.length):0;

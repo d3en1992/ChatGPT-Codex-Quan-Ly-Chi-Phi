@@ -342,16 +342,18 @@ select.cell-input {
   text-overflow: ellipsis;
 }
 .cc-grid-table .col-tp { width: 56px; }
-.cc-grid-table .col-day { width: 54px; }
+.cc-grid-table .col-day { width: 48px; }
 .cc-grid-table .col-tc { width: 60px; }
-.cc-grid-table .col-luong { width: 120px; }
+.cc-grid-table .col-luong { width: 100px; }
 .cc-grid-table .col-total-luong { width: 120px; }
-.cc-grid-table .col-phucap { width: 110px; }
-.cc-grid-table .col-hdml { width: 110px; }
-.cc-grid-table .col-tru  { width: 110px; }
+.cc-grid-table .col-phucap { width: 90px; }
+.cc-grid-table .col-hdml { width: 90px; }
+.cc-grid-table .col-tru  { width: 90px; }
 .cc-grid-table .col-nd { width: 160px; }
 .cc-grid-table .col-total { width: 120px; }
 .cc-grid-table .col-del { width: 34px; }
+.project-col { max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tlt-ct-more { display: inline-block; font-size: 10px; font-weight: 700; color: var(--blue); background: #e8f0fb; border-radius: 3px; padding: 0 4px; cursor: default; }
 
 /* Keep last total column aligned while horizontal scrolling */
 .cc-grid-table th.cc-sticky-total,
