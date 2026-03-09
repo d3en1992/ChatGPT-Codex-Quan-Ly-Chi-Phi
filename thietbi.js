@@ -18,28 +18,71 @@ const TB_STATUS_STYLE = {
 
 let tbData = load('tb_v1', []);
 
+// ── Dynamic name list ──────────────────────────────────────────────
+// Nguồn chính: cats.tbTen (danh mục). Merge thêm tbData.ten làm safety net.
+function tbGetNames() {
+  const catList  = (cats && cats.tbTen) ? cats.tbTen : TB_TEN_MAY;
+  const dataNames = [...new Set(tbData.map(t => (t.ten||'').trim()).filter(Boolean))];
+  return [...new Set([...catList, ...dataNames])].sort((a,b)=>a.localeCompare(b,'vi'));
+}
+
+function tbRefreshNameDl() {
+  const dl = document.getElementById('tb-ten-dl');
+  if (!dl) return;
+  dl.innerHTML = tbGetNames().map(n=>`<option value="${x(n)}">`).join('');
+}
+
+// Đồng bộ tên thiết bị từ tbData vào cats.tbTen (auto-migration, gọi khi cần)
+function tbSyncNamesToCats() {
+  if (!cats || !cats.tbTen) return;
+  let changed = false;
+  tbData.forEach(r => {
+    const n = (r.ten||'').trim();
+    if (n && !cats.tbTen.includes(n)) { cats.tbTen.push(n); changed = true; }
+  });
+  if (changed) { try { saveCats('tbTen'); } catch(e) {} }
+}
+
 // ── Populate selects ──────────────────────────────────────────────
 function tbPopulateSels() {
+  // Auto-sync: đảm bảo mọi tên trong tbData đều có trong cats.tbTen
+  tbSyncNamesToCats();
+
   const allCts = [
     TB_KHO_TONG,
     ...[...new Set([...cats.congTrinh, ...tbData.map(r=>r.ct)]
       .filter(v => v && v !== TB_KHO_TONG))].sort()
   ];
-  // Lọc theo năm: ưu tiên year field, fallback check dữ liệu phát sinh
   const filtered = allCts.filter(ct => _ctInActiveYear(ct));
 
   const sel = document.getElementById('tb-ct-sel');
   const cur = sel.value;
-  // Select nhập mới: lọc theo năm, giữ giá trị hiện tại nếu có
   const ctForInput = allCts.filter(ct => ct === TB_KHO_TONG || _ctInActiveYear(ct) || ct === cur);
   sel.innerHTML = '<option value="">-- Chọn công trình --</option>' +
     ctForInput.map(v=>`<option value="${x(v)}" ${v===cur?'selected':''}>${x(v)}</option>`).join('');
 
-  // Filter danh sách: chỉ CT có liên quan năm đang chọn
   const fSel = document.getElementById('tb-filter-ct');
   const fCur = fSel.value;
   fSel.innerHTML = '<option value="">Tất cả công trình</option>' +
     filtered.map(v=>`<option value="${x(v)}" ${v===fCur?'selected':''}>${x(v)}</option>`).join('');
+
+  // Refresh name filter for KHO TỔNG bảng
+  const khoFSel = document.getElementById('kho-filter-ten');
+  if (khoFSel) {
+    const khoNames = [...new Set(tbData.filter(r=>r.ct===TB_KHO_TONG).map(r=>(r.ten||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi'));
+    const khoFCur = khoFSel.value;
+    khoFSel.innerHTML = '<option value="">Tất cả thiết bị</option>' +
+      khoNames.map(v=>`<option value="${x(v)}" ${v===khoFCur?'selected':''}>${x(v)}</option>`).join('');
+  }
+
+  // Refresh name filter for Thống Kê bảng
+  const tkFSel = document.getElementById('tk-filter-ten');
+  if (tkFSel) {
+    const tkNames = [...new Set(tbData.map(r=>(r.ten||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi'));
+    const tkFCur = tkFSel.value;
+    tkFSel.innerHTML = '<option value="">Tất cả thiết bị</option>' +
+      tkNames.map(v=>`<option value="${x(v)}" ${v===tkFCur?'selected':''}>${x(v)}</option>`).join('');
+  }
 }
 
 // ── Build nhập bảng ───────────────────────────────────────────────
@@ -64,11 +107,9 @@ function tbAddRow(data, num) {
     `<option value="${v}" ${data&&data.tinhtrang===v?'selected':v==='Đang hoạt động'&&!data?'selected':''}>${v}</option>`
   ).join('');
 
-  const tenDl = `<datalist id="tb-ten-dl">${TB_TEN_MAY.map(n=>`<option value="${x(n)}">`).join('')}</datalist>`;
-
   tr.innerHTML = `
     <td class="row-num">${idx}</td>
-    <td style="padding:0">
+    <td class="tb-name-col" style="padding:0">
       <input class="cc-name-input" list="tb-ten-dl" data-tb="ten"
         value="${x(data?.ten||'')}" placeholder="Nhập tên hoặc chọn..."
         style="width:100%;border:none;background:transparent;padding:7px 10px;font-size:13px;font-family:'IBM Plex Sans',sans-serif;outline:none;color:var(--ink)">
@@ -99,9 +140,12 @@ function tbAddRow(data, num) {
     </td>`;
   tbody.appendChild(tr);
 
-  // Đảm bảo datalist tồn tại
+  // Đảm bảo datalist tên tồn tại và cập nhật
   if (!document.getElementById('tb-ten-dl')) {
-    document.body.insertAdjacentHTML('beforeend', tenDl);
+    const dl = document.createElement('datalist');
+    dl.id = 'tb-ten-dl';
+    dl.innerHTML = tbGetNames().map(n=>`<option value="${x(n)}">`).join('');
+    document.body.appendChild(dl);
   }
   // Datalist nguoi
   if (!document.getElementById('tb-nguoi-dl')) {
@@ -145,7 +189,7 @@ function tbSave() {
     const tt     = tr.querySelector('[data-tb="tinhtrang"]')?.value || 'Đang hoạt động';
     const nguoi  = tr.querySelector('[data-tb="nguoi"]')?.value?.trim() || '';
     const ghichu = tr.querySelector('[data-tb="ghichu"]')?.value?.trim() || '';
-    if (ten) rows.push({ id: Date.now()+'_'+Math.random().toString(36).slice(2), ct, ten, soluong:sl, tinhtrang:tt, nguoi, ghichu, ngay });
+    if (ten) rows.push({ ten, soluong: sl, tinhtrang: tt, nguoi, ghichu });
   });
 
   if (!rows.length) {
@@ -154,11 +198,33 @@ function tbSave() {
     return;
   }
 
-  tbData = [...tbData, ...rows];
+  // Chuẩn hóa: cộng dồn nếu đã tồn tại record cùng (ct + ten + tinhtrang)
+  rows.forEach(row => {
+    const exist = tbData.find(rec => rec.ct === ct && rec.ten === row.ten && rec.tinhtrang === row.tinhtrang);
+    if (exist) {
+      exist.soluong = (exist.soluong || 0) + row.soluong;
+      exist.ngay = ngay;
+      if (row.nguoi) exist.nguoi = row.nguoi;
+      if (row.ghichu) exist.ghichu = row.ghichu;
+    } else {
+      tbData.push({ id: Date.now()+'_'+Math.random().toString(36).slice(2), ct, ...row, ngay });
+    }
+  });
+
   save('tb_v1', tbData);
+  // Sync tên mới vào cats.tbTen để hiện trong Danh Mục
+  if (cats && cats.tbTen) {
+    let catChanged = false;
+    rows.forEach(row => {
+      if (row.ten && !cats.tbTen.includes(row.ten)) { cats.tbTen.push(row.ten); catChanged = true; }
+    });
+    if (catChanged) { try { saveCats('tbTen'); } catch(e) {} }
+  }
+  tbRefreshNameDl();
   tbPopulateSels();
   tbRenderList();
   tbRenderThongKeVon();
+  renderKhoTong();
   tbBuildRows();
   toast(`✅ Đã lưu ${rows.length} thiết bị vào ${ct}`, 'success');
   setTimeout(() => {
@@ -166,8 +232,8 @@ function tbSave() {
   }, 1500);
 }
 
-// ── Render bảng danh sách ─────────────────────────────────────────
-const TB_PG = 50;
+// ── Render bảng danh sách (Công Trình — không gồm KHO TỔNG) ──────
+const TB_PG = 7;
 let tbPage = 1;
 
 function tbRenderList() {
@@ -175,10 +241,11 @@ function tbRenderList() {
   const fTt = document.getElementById('tb-filter-tt')?.value || '';
   const fQ  = (document.getElementById('tb-search')?.value || '').toLowerCase().trim();
   let filtered = tbData.filter(r => {
+    // Bảng này chỉ hiển thị thiết bị tại công trình, không gồm KHO TỔNG
+    if (r.ct === TB_KHO_TONG) return false;
     if (fCt && r.ct !== fCt) return false;
     if (fTt && r.tinhtrang !== fTt) return false;
     if (fQ && !(r.ten||'').toLowerCase().includes(fQ) && !(r.nguoi||'').toLowerCase().includes(fQ) && !(r.ghichu||'').toLowerCase().includes(fQ)) return false;
-    // Lọc mềm theo năm: TB của CT có phát sinh năm đang chọn, HOẶC đang hoạt động
     if (activeYear !== 0) {
       const ctActive = _entityInYear(r.ct, 'ct');
       const isRunning = r.tinhtrang === 'Đang hoạt động';
@@ -187,7 +254,6 @@ function tbRenderList() {
     return true;
   });
 
-  // Sort: CT → tên
   filtered.sort((a,b) => (a.ct||'').localeCompare(b.ct,'vi') || (a.ten||'').localeCompare(b.ten,'vi'));
 
   const tbody = document.getElementById('tb-list-tbody');
@@ -206,25 +272,22 @@ function tbRenderList() {
       `<option value="${v}" ${r.tinhtrang===v?'selected':''}>${v}</option>`
     ).join('');
     return `<tr data-tbid="${r.id}">
-      <td style="font-size:12px;font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${x(r.ct)}">${x(r.ct)}</td>
-      <td style="font-weight:600;font-size:13px">${x(r.ten)}</td>
+      <td class="tb-ct-col" title="${x(r.ct)}">${x(r.ct)}</td>
+      <td class="tb-name-col"><span class="tb-name-cell" style="font-weight:600;font-size:13px">${x(r.ten)}</span></td>
       <td style="text-align:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:14px;color:var(--gold)">${r.soluong||0}</td>
       <td>
         <select onchange="tbUpdateField('${r.id}','tinhtrang',this.value)"
-          style="padding:3px 8px;border-radius:5px;border:1px solid var(--line2);font-size:11px;font-weight:600;cursor:pointer;${ttStyle}">
+          class="tb-status" style="cursor:pointer;border:1px solid var(--line2);${ttStyle}">
           ${ttOpts}
         </select>
       </td>
       <td style="color:var(--ink2);font-size:12px">${x(r.nguoi||'—')}</td>
-      <td style="color:var(--ink2);font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${x(r.ghichu)}">${x(r.ghichu||'—')}</td>
+      <td style="color:var(--ink2);font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${x(r.ghichu)}">${x(r.ghichu||'—')}</td>
       <td style="font-size:10px;color:var(--ink3);white-space:nowrap">${r.ngay||''}</td>
       <td style="white-space:nowrap;display:flex;gap:4px;padding:6px 4px">
         <button class="btn btn-outline btn-sm" onclick="tbEditRow('${r.id}')" title="Sửa">✏️</button>
-        ${r.ct !== TB_KHO_TONG
-          ? `<button class="btn btn-sm" onclick="tbThuHoi('${r.id}')" title="Thu hồi về KHO TỔNG"
-               style="background:#2563eb;color:#fff;border:none;font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit">↩ Thu Hồi</button>`
-          : ''}
-        <button class="btn btn-danger btn-sm" onclick="tbDeleteRow('${r.id}')">✕</button>
+        <button class="btn btn-sm" onclick="tbThuHoi('${r.id}')" title="Thu hồi về KHO TỔNG"
+          style="background:#2563eb;color:#fff;border:none;font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit">↩ Thu Hồi</button>
       </td>
     </tr>`;
   }).join('');
@@ -247,30 +310,29 @@ function tbUpdateField(id, field, val) {
   if (idx<0) return;
   tbData[idx][field] = val;
   save('tb_v1', tbData);
-  // Re-style select
-  const tr = document.querySelector(`tr[data-tbid="${id}"]`);
-  if (tr) {
-    const sel = tr.querySelector('select');
-    if (sel) {
-      sel.style.cssText = `padding:3px 8px;border-radius:5px;border:1px solid var(--line2);font-size:11px;font-weight:600;cursor:pointer;${TB_STATUS_STYLE[val]||''}`;
-    }
-  }
+  tbRenderList();
+  tbRenderThongKeVon();
+  renderKhoTong();
   toast('✅ Đã cập nhật tình trạng', 'success');
 }
 
-// ── Xóa thiết bị ─────────────────────────────────────────────────
+// ── Xóa thiết bị (chỉ áp dụng cho KHO TỔNG) ─────────────────────
 function tbDeleteRow(id) {
-  if (!confirm('Xóa thiết bị này?')) return;
-  tbData = tbData.filter(r=>r.id!==id);
+  const r = tbData.find(rec=>rec.id===id);
+  if (!r) return;
+  if (r.ct !== TB_KHO_TONG) { toast('Không thể xóa thiết bị ở công trình!', 'error'); return; }
+  if (!confirm('Xóa thiết bị này khỏi Kho Tổng?')) return;
+  tbData = tbData.filter(rec=>rec.id!==id);
   save('tb_v1', tbData);
   tbRenderList();
   tbRenderThongKeVon();
-  toast('Đã xóa thiết bị');
+  renderKhoTong();
+  toast('Đã xóa thiết bị khỏi Kho Tổng');
 }
 
 // ── Sửa thiết bị (modal) ─────────────────────────────────────────
 function tbEditRow(id) {
-  const r = tbData.find(r=>r.id===id);
+  const r = tbData.find(rec=>rec.id===id);
   if (!r) return;
   let ov = document.getElementById('tb-edit-overlay');
   if (!ov) {
@@ -280,8 +342,20 @@ function tbEditRow(id) {
     ov.onclick = function(e){ if(e.target===this) this.remove(); };
     document.body.appendChild(ov);
   }
-  const ctOpts = cats.congTrinh.filter(v=>_ctInActiveYear(v)||v===r.ct).map(v=>`<option value="${x(v)}" ${v===r.ct?'selected':''}>${x(v)}</option>`).join('');
+
+  // Tất cả CT + KHO TỔNG
+  const allCts = [
+    TB_KHO_TONG,
+    ...[...new Set([...cats.congTrinh, ...tbData.map(rec=>rec.ct)]
+      .filter(v => v && v !== TB_KHO_TONG))].sort()
+  ];
+  const ctOpts = allCts.map(v=>`<option value="${x(v)}" ${v===r.ct?'selected':''}>${x(v)}</option>`).join('');
   const ttOpts = TB_TINH_TRANG.map(v=>`<option value="${v}" ${r.tinhtrang===v?'selected':''}>${v}</option>`).join('');
+  const isKho = r.ct === TB_KHO_TONG;
+  const hintText = isKho
+    ? 'Phần còn lại vẫn ở KHO TỔNG.'
+    : 'Phần còn lại → KHO TỔNG.';
+
   ov.innerHTML = `
   <div style="background:#fff;border-radius:14px;padding:24px;width:min(480px,96vw);box-shadow:0 8px 32px rgba(0,0,0,.2);font-family:'IBM Plex Sans',sans-serif" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -289,15 +363,15 @@ function tbEditRow(id) {
       <button onclick="document.getElementById('tb-edit-overlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888">✕</button>
     </div>
     <div style="display:grid;gap:10px">
+      <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:3px">Tên Thiết Bị</label>
+        <input id="tb-ei-ten" type="text" value="${x(r.ten)}" readonly
+          style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:7px;font-family:inherit;font-size:13px;outline:none;background:#f5f5f5;color:#888;cursor:not-allowed"></div>
       <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:3px">Công Trình</label>
         <select id="tb-ei-ct" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:7px;font-family:inherit;font-size:13px;outline:none">
           <option value="">-- Chọn --</option>${ctOpts}</select></div>
-      <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:3px">Tên Thiết Bị</label>
-        <input id="tb-ei-ten" type="text" value="${x(r.ten)}" list="tb-ten-dl"
-          style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:7px;font-family:inherit;font-size:13px;outline:none"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:3px">Số Lượng</label>
-          <input id="tb-ei-sl" type="number" class="np-num-input" min="0" value="${r.soluong||0}" inputmode="decimal"
+        <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:3px">Số Lượng <span style="font-weight:400;color:var(--ink3)">(tối đa ${r.soluong||0})</span></label>
+          <input id="tb-ei-sl" type="number" class="np-num-input" min="1" max="${r.soluong||0}" value="${r.soluong||0}" inputmode="decimal"
             style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:7px;font-family:inherit;font-size:13px;outline:none"></div>
         <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:3px">Tình Trạng</label>
           <select id="tb-ei-tt" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:7px;font-family:inherit;font-size:13px;outline:none">${ttOpts}</select></div>
@@ -308,6 +382,9 @@ function tbEditRow(id) {
       <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:3px">Ghi Chú</label>
         <input id="tb-ei-ghichu" type="text" value="${x(r.ghichu||'')}"
           style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:7px;font-family:inherit;font-size:13px;outline:none"></div>
+      <div style="background:#f0f7ff;border-radius:8px;padding:10px;font-size:12px;color:#1565c0">
+        ℹ️ SL nhập = số lượng chuyển đi. ${hintText}
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button onclick="document.getElementById('tb-edit-overlay').remove()"
@@ -320,21 +397,65 @@ function tbEditRow(id) {
 }
 
 function tbSaveEdit(id) {
-  const idx = tbData.findIndex(r=>r.id===id);
+  const idx = tbData.findIndex(rec=>rec.id===id);
   if (idx<0) return;
-  tbData[idx] = { ...tbData[idx],
-    ct:        document.getElementById('tb-ei-ct').value,
-    ten:       document.getElementById('tb-ei-ten').value.trim(),
-    soluong:   parseFloat(document.getElementById('tb-ei-sl').value)||0,
-    tinhtrang: document.getElementById('tb-ei-tt').value,
-    nguoi:     document.getElementById('tb-ei-nguoi').value.trim(),
-    ghichu:    document.getElementById('tb-ei-ghichu').value.trim()
-  };
+  const r = tbData[idx];
+
+  const newCT     = document.getElementById('tb-ei-ct').value.trim();
+  const newSL     = parseFloat(document.getElementById('tb-ei-sl').value) || 0;
+  const newTT     = document.getElementById('tb-ei-tt').value;
+  const newNguoi  = document.getElementById('tb-ei-nguoi').value.trim();
+  const newGhichu = document.getElementById('tb-ei-ghichu').value.trim();
+  const oldSL     = r.soluong || 0;
+  const ngay      = today();
+
+  if (!newCT) { toast('Vui lòng chọn công trình!', 'error'); return; }
+  if (newSL <= 0 || newSL > oldSL) {
+    toast(`Số lượng không hợp lý (phải từ 1 đến ${oldSL})!`, 'error');
+    return;
+  }
+
+  const remaining = oldSL - newSL;
+
+  // Xóa record gốc
+  tbData = tbData.filter(rec => rec.id !== id);
+
+  // Thêm/cộng dồn số lượng chuyển đi vào newCT
+  const destExist = tbData.find(rec => rec.ct === newCT && rec.ten === r.ten && rec.tinhtrang === newTT);
+  if (destExist) {
+    destExist.soluong = (destExist.soluong || 0) + newSL;
+    if (newNguoi) destExist.nguoi = newNguoi;
+    if (newGhichu) destExist.ghichu = newGhichu;
+    destExist.ngay = ngay;
+  } else {
+    tbData.push({
+      id: Date.now()+'_'+Math.random().toString(36).slice(2),
+      ct: newCT, ten: r.ten, soluong: newSL, tinhtrang: newTT,
+      nguoi: newNguoi, ghichu: newGhichu, ngay
+    });
+  }
+
+  // Phần còn lại → KHO TỔNG
+  if (remaining > 0) {
+    const khoExist = tbData.find(rec => rec.ct === TB_KHO_TONG && rec.ten === r.ten);
+    if (khoExist) {
+      khoExist.soluong = (khoExist.soluong || 0) + remaining;
+      khoExist.ngay = ngay;
+    } else {
+      tbData.push({
+        id: Date.now()+'_'+Math.random().toString(36).slice(2),
+        ct: TB_KHO_TONG, ten: r.ten, soluong: remaining,
+        tinhtrang: 'Đang hoạt động', nguoi: '', ghichu: '', ngay
+      });
+    }
+  }
+
   save('tb_v1', tbData);
   document.getElementById('tb-edit-overlay').remove();
   tbPopulateSels();
   tbRenderList();
   tbRenderThongKeVon();
+  renderKhoTong();
   toast('✅ Đã cập nhật thiết bị!', 'success');
 }
 
@@ -354,13 +475,12 @@ function tbExportCSV() {
 
 // ── Thu hồi thiết bị về KHO TỔNG ─────────────────────────────────
 function tbThuHoi(id) {
-  const r = tbData.find(r => r.id === id);
+  const r = tbData.find(rec => rec.id === id);
   if (!r) return;
   if (r.ct === TB_KHO_TONG) { toast('Thiết bị này đã ở KHO TỔNG!', 'error'); return; }
   if (!confirm(`Thu hồi "${r.ten}" (SL: ${r.soluong||0}) về KHO TỔNG?`)) return;
 
-  // Tìm record KHO TỔNG cùng tên → cộng dồn, hoặc tạo mới
-  const khoIdx = tbData.findIndex(x => x.ct === TB_KHO_TONG && x.ten === r.ten);
+  const khoIdx = tbData.findIndex(rec => rec.ct === TB_KHO_TONG && rec.ten === r.ten);
   if (khoIdx >= 0) {
     tbData[khoIdx].soluong = (tbData[khoIdx].soluong || 0) + (r.soluong || 0);
     tbData[khoIdx].ngay = today();
@@ -376,21 +496,78 @@ function tbThuHoi(id) {
       ngay: today()
     });
   }
-  // Xóa record cũ (Tổng Sở Hữu giữ nguyên — chỉ dịch chuyển SL)
-  tbData = tbData.filter(x => x.id !== id);
+  tbData = tbData.filter(rec => rec.id !== id);
   save('tb_v1', tbData);
   tbPopulateSels();
   tbRenderList();
   tbRenderThongKeVon();
+  renderKhoTong();
   toast(`✅ Đã thu hồi "${r.ten}" về KHO TỔNG`, 'success');
 }
 
+// ── Bảng Kho Tổng Thiết Bị ───────────────────────────────────────
+const KHO_PG = 7;
+let khoPage = 1;
+
+function renderKhoTong() {
+  const tbody = document.getElementById('kho-list-tbody');
+  if (!tbody) return;
+
+  const fTen = document.getElementById('kho-filter-ten')?.value || '';
+  let filtered = tbData.filter(r => {
+    if (r.ct !== TB_KHO_TONG) return false;
+    if (fTen && r.ten !== fTen) return false;
+    return true;
+  });
+
+  filtered.sort((a,b) => (a.ten||'').localeCompare(b.ten,'vi'));
+
+  const start = (khoPage-1)*KHO_PG;
+  const paged = filtered.slice(start, start+KHO_PG);
+
+  if (!paged.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Kho tổng trống</td></tr>';
+    document.getElementById('kho-pagination').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = paged.map(r => {
+    const ttStyle = TB_STATUS_STYLE[r.tinhtrang] || '';
+    return `<tr data-tbid="${r.id}">
+      <td class="tb-name-col"><span class="tb-name-cell" style="font-weight:600;font-size:13px">${x(r.ten)}</span></td>
+      <td style="text-align:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:14px;color:var(--gold)">${r.soluong||0}</td>
+      <td><span class="tb-status" style="${ttStyle}">${x(r.tinhtrang||'')}</span></td>
+      <td style="color:var(--ink2);font-size:12px">${x(r.nguoi||'—')}</td>
+      <td style="color:var(--ink2);font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${x(r.ghichu)}">${x(r.ghichu||'—')}</td>
+      <td style="font-size:10px;color:var(--ink3);white-space:nowrap">${r.ngay||''}</td>
+      <td style="white-space:nowrap;display:flex;gap:4px;padding:6px 4px">
+        <button class="btn btn-outline btn-sm" onclick="tbEditRow('${r.id}')" title="Sửa">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="tbDeleteRow('${r.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const tp = Math.ceil(filtered.length/KHO_PG);
+  let pag = `<span>${filtered.length} thiết bị</span>`;
+  if (tp>1) {
+    pag += '<div class="page-btns">';
+    for(let p=1;p<=Math.min(tp,10);p++) pag+=`<button class="page-btn ${p===khoPage?'active':''}" onclick="khoGoTo(${p})">${p}</button>`;
+    pag += '</div>';
+  }
+  document.getElementById('kho-pagination').innerHTML = pag;
+}
+
+function khoGoTo(p) { khoPage=p; renderKhoTong(); }
+
 // ── Bảng Thống Kê Theo Tên Thiết Bị ─────────────────────────────
+const TK_PG = 7;
+let tkPage = 1;
+
 function tbRenderThongKeVon() {
   const tbody = document.getElementById('tb-vonke-tbody');
   if (!tbody) return;
 
-  // Nhóm theo tên thiết bị
+  const fTen = document.getElementById('tk-filter-ten')?.value || '';
   const map = {};
   tbData.forEach(r => {
     if (!r.ten) return;
@@ -404,27 +581,49 @@ function tbRenderThongKeVon() {
     }
   });
 
-  const items = Object.values(map).sort((a, b) => a.ten.localeCompare(b.ten, 'vi'));
+  let items = Object.values(map).sort((a, b) => a.ten.localeCompare(b.ten, 'vi'));
+  if (fTen) items = items.filter(item => item.ten === fTen);
 
-  if (!items.length) {
+  const tp = Math.ceil(items.length/TK_PG);
+  const start = (tkPage-1)*TK_PG;
+  const paged = items.slice(start, start+TK_PG);
+
+  if (!paged.length) {
     tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Chưa có dữ liệu thiết bị</td></tr>';
+    const pgEl = document.getElementById('tk-pagination');
+    if (pgEl) pgEl.innerHTML = '';
     return;
   }
 
-  tbody.innerHTML = items.map(item => {
+  tbody.innerHTML = paged.map(item => {
     const tags = Object.entries(item.cts)
       .map(([ct, sl]) =>
-        `<span style="background:#e8f0fe;color:#1967d2;padding:1px 7px;border-radius:10px;font-size:10px;margin:1px;display:inline-block">${x(ct)}: ${sl}</span>`)
+        `<span style="background:#e8f0fe;color:#1967d2;padding:2px 7px;border-radius:10px;font-size:10px;display:inline-flex;align-items:center;max-width:150px;overflow:hidden">` +
+        `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${x(ct)}</span>` +
+        `<span style="white-space:nowrap;flex-shrink:0">:\u00a0${sl}</span>` +
+        `</span>`)
       .join('');
     return `<tr>
-      <td style="font-weight:600;font-size:13px">${x(item.ten)}</td>
+      <td class="tb-name-col"><span class="tb-name-cell" style="font-weight:600;font-size:13px">${x(item.ten)}</span></td>
       <td style="text-align:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:15px;color:var(--ink)">${item.total}</td>
       <td style="text-align:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:14px;color:#1a7a45">${item.kho || 0}</td>
-      <td style="line-height:2">${tags || '<span style="color:var(--ink3);font-size:12px">—</span>'}</td>
+      <td><div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center">${tags || '<span style="color:var(--ink3);font-size:12px">—</span>'}</div></td>
     </tr>`;
   }).join('');
+
+  const pgEl = document.getElementById('tk-pagination');
+  if (pgEl) {
+    let pag = `<span>${items.length} loại</span>`;
+    if (tp>1) {
+      pag += '<div class="page-btns">';
+      for(let p=1;p<=Math.min(tp,10);p++) pag+=`<button class="page-btn ${p===tkPage?'active':''}" onclick="tkGoTo(${p})">${p}</button>`;
+      pag += '</div>';
+    }
+    pgEl.innerHTML = pag;
+  }
 }
+
+function tkGoTo(p) { tkPage=p; tbRenderThongKeVon(); }
 
 // ── Init TB khi load trang ────────────────────────────────────────
 // (tbData đã load ở trên, tbBuildRows gọi khi goPage)
-

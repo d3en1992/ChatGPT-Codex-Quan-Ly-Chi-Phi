@@ -9,16 +9,20 @@ const DEFAULTS = {
   congTrinh: ["CÔNG TY - NHÀ","SC CT CÔ NHUNG - 191 THÀNH CÔNG, Q TÂN PHÚ","CT BỬU AN - 85/5 LÊ LAI, P12, Q TÂN BÌNH","CT A DŨNG - SUỐI CÁT, ĐỒNG NAI","CT BÁC CHỮ - 23/51A NGUYỄN HỮU TIẾN, Q TÂN PHÚ","CT BÁC ĐỆ - MỸ HẠNH NAM, ĐỨC HÒA, LONG AN","SC QUẬN 9","SC MINH CHÍNH - Q GÒ VẤP","SC CT LONG HẢI - VŨNG TÀU"],
   loaiChiPhi: ["Nhân Công","Thầu Phụ","Vật Liệu XD","Sắt Thép","Vật Tư Điện Nước","Đổ Bê Tông","Copha - VTP - Máy","Hóa Đơn Lẻ","Quyết Toán - Phát Sinh","Thiết Kế / Xin Phép","Chi Phí Khác"],
   nhaCungCap: ["Công ty VLXD Minh Phát","Cửa Hàng Sắt Thép Hùng","Điện Nước Phú Thịnh","Hóa Đơn Điện Lực"],
-  nguoiTH: ["A Long","A Toán","A Dũng","Duy Sáng","HD Lẻ","Tình"]
+  nguoiTH: ["A Long","A Toán","A Dũng","Duy Sáng","HD Lẻ","Tình"],
+  tbTen: ['Máy cắt cầm tay','Máy cắt bàn','Máy uốn sắt lớn','Bàn uốn sắt',
+          'Thước nhôm','Chân Dàn 1.7m','Chân Dàn 1.5m',
+          'Chéo lớn','Chéo nhỏ','Kít tăng giàn giáo','Cây chống tăng']
 };
 
 const CATS = [
-  { id:'congTrinh',  title:'🏗️ Công Trình',       sk:'cat_ct',    refField:'congtrinh' },
-  { id:'loaiChiPhi', title:'📂 Loại Chi Phí',      sk:'cat_loai',  refField:'loai' },
-  { id:'nhaCungCap', title:'🏪 Nhà Cung Cấp',      sk:'cat_ncc',   refField:'ncc' },
-  { id:'nguoiTH',    title:'👷 Người Thực Hiện',   sk:'cat_nguoi', refField:'nguoi' },
-  { id:'thauPhu',    title:'🤝 Thầu Phụ / TP',     sk:'cat_tp',    refField:'tp' },
-  { id:'congNhan',   title:'🪖 Công Nhân',          sk:'cat_cn',    refField:null }
+  { id:'congTrinh',  title:'🏗️ Công Trình',           sk:'cat_ct',     refField:'congtrinh' },
+  { id:'loaiChiPhi', title:'📂 Loại Chi Phí',          sk:'cat_loai',   refField:'loai' },
+  { id:'nhaCungCap', title:'🏪 Nhà Cung Cấp',          sk:'cat_ncc',    refField:'ncc' },
+  { id:'nguoiTH',    title:'👷 Người Thực Hiện',       sk:'cat_nguoi',  refField:'nguoi' },
+  { id:'thauPhu',    title:'🤝 Thầu Phụ / TP',         sk:'cat_tp',     refField:'tp' },
+  { id:'congNhan',   title:'🪖 Công Nhân',              sk:'cat_cn',     refField:null },
+  { id:'tbTen',      title:'🛠 Máy / Thiết Bị Thi Công', sk:'cat_tbteb', refField:null }
 ];
 
 // ══════════════════════════════════════════════════════════
@@ -449,6 +453,7 @@ function importJSON(file) {
       cats.nguoiTH        = load('cat_nguoi',    DEFAULTS.nguoiTH);
       cats.thauPhu        = load('cat_tp',       []);
       cats.congNhan       = load('cat_cn',       []);
+      cats.tbTen          = load('cat_tbteb',    DEFAULTS.tbTen);
 
       buildYearSelect(); _refreshAllTabs();
       rebuildEntrySelects(); rebuildUngSelects();
@@ -497,6 +502,7 @@ function restoreFromBackup(index) {
   cats.nguoiTH        = load('cat_nguoi',    DEFAULTS.nguoiTH);
   cats.thauPhu        = load('cat_tp',       []);
   cats.congNhan       = load('cat_cn',       []);
+  cats.tbTen          = load('cat_tbteb',    DEFAULTS.tbTen);
 
   buildYearSelect(); _refreshAllTabs();
   rebuildEntrySelects(); rebuildUngSelects();
@@ -948,6 +954,7 @@ function reloadFromCloud() {
     cats.loaiChiPhi     = load('cat_loai',     DEFAULTS.loaiChiPhi);
     cats.nhaCungCap     = load('cat_ncc',      DEFAULTS.nhaCungCap);
     cats.nguoiTH        = load('cat_nguoi',    DEFAULTS.nguoiTH);
+    cats.tbTen          = load('cat_tbteb',    DEFAULTS.tbTen);
     buildYearSelect();
     rebuildEntrySelects(); rebuildUngSelects();
     buildFilters(); filterAndRender(); renderTrash();
@@ -1039,7 +1046,8 @@ let cats = {
   nhaCungCap:     load('cat_ncc',      DEFAULTS.nhaCungCap),
   nguoiTH:        load('cat_nguoi',    DEFAULTS.nguoiTH),
   thauPhu:        load('cat_tp',       []),
-  congNhan:       load('cat_cn',       [])
+  congNhan:       load('cat_cn',       []),
+  tbTen:          load('cat_tbteb',    DEFAULTS.tbTen)  // Danh mục tên máy/thiết bị
 };
 let cnRoles = load('cat_cn_roles', {}); // { "Tên CN": "C/T/P" }
 

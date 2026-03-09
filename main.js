@@ -65,6 +65,7 @@ function init() {
     cats.loaiChiPhi     = load('cat_loai',     DEFAULTS.loaiChiPhi);
     cats.nhaCungCap     = load('cat_ncc',      DEFAULTS.nhaCungCap);
     cats.nguoiTH        = load('cat_nguoi',    DEFAULTS.nguoiTH);
+    cats.tbTen          = load('cat_tbteb',    DEFAULTS.tbTen);
     buildYearSelect(); updateTop();
     rebuildEntrySelects(); rebuildCCNameList(); populateCCCtSel();
     initTable(5); initUngTable(4); initCC();
@@ -100,7 +101,7 @@ function goPage(btn, id) {
   if (id==='doanhthu') initDoanhThu();
   if (id==='nhapung') { initUngTableIfEmpty(); buildUngFilters(); filterAndRenderUng(); }
   if (id==='chamcong') { populateCCCtSel(); rebuildCCNameList(); renderCCHistory(); renderCCTLT(); }
-  if (id==='thietbi') { tbPopulateSels(); tbBuildRows(5); tbRenderList(); tbRenderThongKeVon(); }
+  if (id==='thietbi') { tbPopulateSels(); tbBuildRows(5); tbRenderList(); renderKhoTong(); tbRenderThongKeVon(); }
 }
 
 // Sub-tab navigation bên trong page-nhap
@@ -192,6 +193,7 @@ function _refreshAllTabs() {
   cats.nguoiTH        = load('cat_nguoi',    DEFAULTS.nguoiTH);
   cats.thauPhu        = load('cat_tp',       []);
   cats.congNhan       = load('cat_cn',       []);
+  cats.tbTen          = load('cat_tbteb',    DEFAULTS.tbTen);
   cnRoles             = load('cat_cn_roles', {});
 
   // Dọn sạch HĐ CC cũ còn sót trong inv_v3 (migration một lần)

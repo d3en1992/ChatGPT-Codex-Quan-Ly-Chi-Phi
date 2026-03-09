@@ -1045,3 +1045,70 @@ body { overscroll-behavior-y: none; }
   }
 
 }
+
+/* ══════════════════════════════════════════════════════════
+   THIẾT BỊ — Table layout optimizations
+   ══════════════════════════════════════════════════════════ */
+
+/* 1. Tên cột chung: wrap 2 dòng, có box-shadow khi sticky */
+.tb-name-col {
+  white-space: normal;
+  word-break: break-word;
+  box-shadow: 2px 0 4px rgba(0,0,0,.06);
+}
+
+/* 2. Line-clamp 2 dòng cho nội dung tên */
+.tb-name-cell {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 3. Badge tình trạng gọn */
+.tb-status {
+  padding: 3px 6px;
+  font-size: 11px;
+  border-radius: 6px;
+  font-weight: 600;
+  display: inline-block;
+  white-space: nowrap;
+  border: none;
+  font-family: inherit;
+}
+
+/* 4. Entry table: ẩn cột # (row-num), bảng cố định */
+.tb-entry-table { table-layout: fixed; }
+.tb-entry-table .col-num,
+.tb-entry-table .row-num { display: none; }
+
+/* 5. Sticky tên CHỈ cho bảng nhập — khớp pattern cc-sticky-name */
+.tb-entry-table .tb-name-col {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--paper);
+  box-shadow: 2px 0 6px rgba(0,0,0,.08);
+}
+.tb-entry-table thead .tb-name-col { z-index: 4; background: #eeece7; }
+.tb-entry-table tbody tr:hover .tb-name-col { background: #fffcf3; }
+
+/* 6. Bảng 2 (Danh Sách Tại CT): không sticky, cố định layout */
+#tb-list-table { table-layout: fixed; }
+#tb-list-table .tb-ct-col {
+  width: 115px; max-width: 115px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; font-weight: 600;
+}
+#tb-list-table .tb-name-col { width: 160px; }
+
+/* 7. Kho Tổng: không sticky, cố định layout */
+#kho-list-table { table-layout: fixed; }
+#kho-list-table .tb-name-col { width: 190px; }
+
+/* 8. Thống Kê: không sticky, cố định layout */
+#tb-vonke-table { table-layout: fixed; }
+#tb-vonke-table .tb-name-col { width: 190px; }
+
+/* Mobile: tắt sticky bảng nhập */
+@media (max-width: 600px) {
+  .tb-entry-table .tb-name-col { position: static; box-shadow: none; }
+}

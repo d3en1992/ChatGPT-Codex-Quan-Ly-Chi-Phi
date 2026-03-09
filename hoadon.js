@@ -574,6 +574,7 @@ function renderSettings() {
         ${filtered.map(({item,idx})=>
           cfg.id==='congNhan'  ? renderCNItem(item,idx) :
           cfg.id==='congTrinh' ? renderCTItem(item,idx) :
+          cfg.id==='tbTen'     ? renderTbTenItem(item,idx) :
           renderItem(cfg.id,item,idx)
         ).join('')}
       </div>
@@ -655,6 +656,21 @@ function updateCNRole(idx, role) {
   toast(`✅ Đã cập nhật vai trò "${name}" → ${role||'—'}`, 'success');
 }
 
+// ── Render item Thiết Bị (tbTen) ──────────────────────────────────
+function renderTbTenItem(item, idx) {
+  const inUse = typeof tbData !== 'undefined' && tbData.some(t => t.ten === item);
+  return `<div class="settings-item" id="si-tbTen-${idx}" style="${inUse?'background:rgba(26,122,69,0.04)':''}">
+    <span class="s-name" id="sn-tbTen-${idx}" ondblclick="startEdit('tbTen',${idx})">${x(item)}</span>
+    ${inUse?`<span title="Đang được sử dụng" style="font-size:10px;color:#1a7a45;padding:2px 5px;background:rgba(26,122,69,0.1);border-radius:3px;margin-right:2px;flex-shrink:0">✓ đang dùng</span>`:''}
+    <input class="s-edit-input" id="se-tbTen-${idx}" value="${x(item)}"
+      onblur="finishEdit('tbTen',${idx})"
+      onkeydown="if(event.key==='Enter')finishEdit('tbTen',${idx});if(event.key==='Escape')cancelEdit('tbTen',${idx})">
+    <button class="btn btn-outline btn-sm btn-icon" onclick="startEdit('tbTen',${idx})" title="Sửa tên">✏️</button>
+    <button class="btn ${inUse?'btn-outline':'btn-danger'} btn-sm btn-icon" onclick="delItem('tbTen',${idx})"
+      title="${inUse?'Thiết bị đang được sử dụng — không thể xóa':'Xóa'}" ${inUse?'style="opacity:0.4;cursor:not-allowed"':''}>✕</button>
+  </div>`;
+}
+
 // ── Đồng bộ vai trò vào ccData (năm hiện tại + năm trước) ────────
 function syncCNRoles(name, role) {
   const curYear = activeYear || new Date().getFullYear();
@@ -692,6 +708,14 @@ function finishEdit(catId,idx) {
     if(catId==='nguoiTH'||catId==='nhaCungCap') ungRecords.forEach(r=>{ if((r.loai||'thauphu')==='thauphu'&&r.tp===old) r.tp=newVal; });
     if(catId==='congNhan') ungRecords.forEach(r=>{ if(r.loai==='congnhan'&&r.tp===old) r.tp=newVal; });
     if(catId==='congTrinh') ungRecords.forEach(r=>{ if(r.congtrinh===old) r.congtrinh=newVal; });
+  }
+  // tbTen: propagate rename to tbData
+  if (catId === 'tbTen') {
+    if (typeof tbData !== 'undefined') {
+      tbData.forEach(t => { if (t.ten === old) t.ten = newVal; });
+      save('tb_v1', tbData);
+      try { tbRefreshNameDl(); tbPopulateSels(); tbRenderList(); renderKhoTong(); tbRenderThongKeVon(); } catch(e) {}
+    }
   }
   // I.1: Cập nhật ccData + tbData khi đổi tên CT (giới hạn 2 năm)
   if (catId === 'congTrinh') {
@@ -736,9 +760,14 @@ function addItem(catId) {
     try { populateCCCtSel(); } catch(e) {}
     try { tbPopulateSels(); } catch(e) {}
   }
+  if (catId === 'tbTen') {
+    try { tbRefreshNameDl(); tbPopulateSels(); } catch(e) {}
+  }
   toast(`✅ Đã thêm "${val}"`,'success');
 }
 function isItemInUse(catId, item) {
+  // tbTen — kiểm tra trong tbData
+  if (catId === 'tbTen') return typeof tbData !== 'undefined' && tbData.some(t => t.ten === item);
   const cfg = CATS.find(c=>c.id===catId);
   if(!cfg || !cfg.refField) {
     // congNhan — kiểm tra trong ccData
@@ -766,7 +795,10 @@ function isItemInUse(catId, item) {
 function delItem(catId,idx) {
   const item=cats[catId][idx];
   if(isItemInUse(catId, item)) {
-    toast(`⚠️ Công trình đã có dữ liệu, không thể xóa.`, 'error');
+    const msg = catId === 'tbTen'
+      ? '⚠️ Thiết bị đang được sử dụng trong công trình — không thể xóa.'
+      : '⚠️ Mục này đã có dữ liệu, không thể xóa.';
+    toast(msg, 'error');
     return;
   }
   if(!confirm(`Xóa "${item}" khỏi danh mục?`)) return;
