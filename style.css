@@ -255,7 +255,12 @@ select.cell-input {
 }
 .detail-footer-row {
   display: flex; align-items: center; gap: 12px;
-  min-width: 340px; justify-content: space-between;
+  width: 100%; max-width: 340px; justify-content: space-between;
+}
+@media (max-width: 480px) {
+  .detail-invoice-footer { align-items: stretch; padding: 10px 12px; }
+  .detail-footer-row { max-width: 100%; }
+  .detail-footer-ck-input { width: 100%; }
 }
 .detail-footer-label {
   font-size: 12px; font-weight: 600; color: var(--ink2);
@@ -417,6 +422,11 @@ select.cell-input {
 .cc-grid-table .col-del { width: 34px; }
 .project-col { max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tlt-ct-more { display: inline-block; font-size: 10px; font-weight: 700; color: var(--blue); background: #e8f0fb; border-radius: 3px; padding: 0 4px; cursor: default; }
+
+/* ChamCong week-bar: ẩn các label thừa, giữ nguyên inputs và nút điều hướng */
+#cc-week-label { display: none; }
+#page-chamcong span.bar-label:has(+ #cc-from) { display: none; }
+#page-chamcong span.bar-label:has(+ #cc-ct-sel) { display: none; }
 
 /* Keep last total column aligned while horizontal scrolling */
 .cc-grid-table th.cc-sticky-total,

@@ -14,6 +14,15 @@ function addRows(n) { for(let i=0;i<n;i++) addRow(); }
 
 function addRow(d={}) {
   const tbody = document.getElementById('entry-tbody');
+  // PHẦN 6: copy loai/CT từ dòng trên nếu không có dữ liệu truyền vào
+  if(!d.loai && !d.congtrinh) {
+    const lastRow = tbody.querySelector('tr:last-child');
+    if(lastRow) {
+      const prevLoai = lastRow.querySelector('[data-f="loai"]')?.value || '';
+      const prevCt   = lastRow.querySelector('[data-f="ct"]')?.value   || '';
+      if(prevLoai || prevCt) d = { ...d, loai: prevLoai, congtrinh: prevCt };
+    }
+  }
   const num = tbody.children.length + 1;
   const ctDef = d.congtrinh || '';
 
@@ -82,6 +91,29 @@ function addRow(d={}) {
       el.addEventListener('input', calcSummary);
       el.addEventListener('change', calcSummary);
     }
+  });
+
+  // PHẦN 5: Enter key → nhảy xuống dòng dưới (chỉ áp dụng cho input, không phải select)
+  const entryInputs = [...tr.querySelectorAll('input')];
+  entryInputs.forEach(inp => {
+    inp.addEventListener('keydown', function(e) {
+      if(e.key !== 'Enter') return;
+      e.preventDefault();
+      const allRows = [...document.querySelectorAll('#entry-tbody tr')];
+      const curIdx  = allRows.indexOf(tr);
+      const colIdx  = entryInputs.indexOf(this);
+      let targetRow;
+      if(curIdx < allRows.length - 1) {
+        targetRow = allRows[curIdx + 1];
+      } else {
+        addRows(1);
+        targetRow = [...document.querySelectorAll('#entry-tbody tr')][curIdx + 1];
+      }
+      if(targetRow) {
+        const targets = [...targetRow.querySelectorAll('input')];
+        (targets[colIdx] || targets[0])?.focus();
+      }
+    });
   });
 
   tbody.appendChild(tr);
@@ -313,6 +345,7 @@ function goInnerSub(btn, id) {
       for(let i=0; i<5; i++) addDetailRow();
     }
   }
+  renderTodayInvoices(); // cập nhật bảng theo ngày của subtab vừa chuyển
 }
 
 function _initDetailFormSelects() {
@@ -323,6 +356,20 @@ function _initDetailFormSelects() {
   const ctSel = document.getElementById('detail-ct');
   ctSel.innerHTML = '<option value="">-- Chọn Công Trình --</option>' +
     cats.congTrinh.filter(v => _ctInActiveYear(v)).map(v => `<option value="${x(v)}">${x(v)}</option>`).join('');
+
+  // PHẦN 3: Format #detail-footer-ck (số tiền → hàng nghìn, % → giữ nguyên)
+  const footerCk = document.getElementById('detail-footer-ck');
+  if(footerCk && !footerCk.dataset.fmtInit) {
+    footerCk.dataset.fmtInit = '1';
+    footerCk.addEventListener('focus', function() {
+      const v = this.value.trim();
+      if(v && !v.endsWith('%')) { const n = parseMoney(v); if(n) this.value = String(n); }
+    });
+    footerCk.addEventListener('blur', function() {
+      const v = this.value.trim();
+      if(v && !v.endsWith('%')) { const n = parseMoney(v); this.value = n ? numFmt(n) : v; }
+    });
+  }
 }
 
 function renderDetailRowHTML(d, num) {
@@ -552,6 +599,26 @@ function openDetailEdit(inv) {
 // ══════════════════════════════
 // INVOICE LIST
 // ══════════════════════════════
+
+// Toggle giữa "Tất cả HĐ" và "🗑 Đã xóa" trong sub-tat-ca
+function switchTatCaView(val) {
+  const activeWrap = document.getElementById('active-inv-wrap');
+  const trashWrap  = document.getElementById('inline-trash-wrap');
+  const isTrash = val === 'trash';
+  if(activeWrap) activeWrap.style.display = isTrash ? 'none' : '';
+  if(trashWrap)  trashWrap.style.display  = isTrash ? ''     : 'none';
+  // Ẩn/hiện search + filters theo chế độ
+  const filterIds = ['tc-search-box','f-ct','f-loai','f-month'];
+  filterIds.forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = isTrash ? 'none' : '';
+  });
+  const exportBtn = document.getElementById('btn-export-csv');
+  if(exportBtn) exportBtn.style.display = isTrash ? 'none' : '';
+  if(isTrash) renderTrash();
+  else { buildFilters(); filterAndRender(); }
+}
+
 function buildFilters() {
   const allInvs = buildInvoices();
   const yearInvs = allInvs.filter(i=>inActiveYear(i.ngay));
@@ -1475,7 +1542,12 @@ function renderTrash() {
 //  BẢNG HÓA ĐƠN ĐÃ NHẬP TRONG NGÀY
 // ══════════════════════════════════════════════════════════════════
 function renderTodayInvoices() {
-  const date = document.getElementById('entry-date')?.value || today();
+  // Lấy ngày từ subtab đang active
+  const activeInner = document.querySelector('#sub-nhap-hd .inner-sub-page.active');
+  const date = (activeInner?.id === 'inr-hd-chitiet')
+    ? (document.getElementById('detail-ngay')?.value || today())
+    : (document.getElementById('entry-date')?.value || today());
+
   const dateEl = document.getElementById('today-inv-date');
   if(dateEl) dateEl.textContent = '— ' + date;
 
@@ -1483,10 +1555,9 @@ function renderTodayInvoices() {
   const footer = document.getElementById('today-inv-footer');
   if(!tbody) return;
 
-  // Lọc HĐ theo ngày đã chọn (không phân biệt năm)
   const todayInvs = invoices.filter(i => i.ngay === date && !i.ccKey);
   if(!todayInvs.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="8">Chưa có hóa đơn nào vào ngày ${date}</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Chưa có hóa đơn nào vào ngày ${date}</td></tr>`;
     if(footer) footer.innerHTML = '';
     return;
   }
@@ -1503,10 +1574,6 @@ function renderTodayInvoices() {
       <td style="text-align:right;${mono};font-weight:700;color:var(--green)">${numFmt(th)}</td>
       <td style="color:var(--ink2);font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x(inv.nd||'—')}</td>
       <td style="color:var(--ink2);font-size:11px">${x(inv.nguoi||'—')}</td>
-      <td style="white-space:nowrap;display:flex;gap:3px;padding:5px 4px">
-        <button class="btn btn-outline btn-sm" onclick="editTodayInv('${inv.id}')" title="Sửa">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="delInvoice('${inv.id}');renderTodayInvoices()">✕</button>
-      </td>
     </tr>`;
   }).join('');
 

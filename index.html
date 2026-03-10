@@ -178,8 +178,7 @@
     <!-- Sub-navigation -->
     <div class="sub-nav">
       <button class="sub-nav-btn active" onclick="goSubPage(this,'sub-nhap-hd');renderTodayInvoices()">📝 Nhập HĐ/CP</button>
-      <button class="sub-nav-btn" onclick="goSubPage(this,'sub-tat-ca')">📂 Tất cả CP/HĐ</button>
-      <button class="sub-nav-btn" onclick="goSubPage(this,'sub-da-xoa')">🗑 HĐ/CP đã xóa</button>
+      <button class="sub-nav-btn" onclick="goSubPage(this,'sub-tat-ca');switchTatCaView('active')">📂 Tất cả CP/HĐ</button>
     </div>
 
     <!-- ── Sub-page 1: Nhập HĐ/CP ── -->
@@ -203,7 +202,7 @@
 
         <div class="entry-date-bar">
           <span class="bar-label">Ngày</span>
-          <input type="date" id="entry-date" class="date-input">
+          <input type="date" id="entry-date" class="date-input" onchange="renderTodayInvoices()">
         </div>
 
         <div class="entry-table-wrap">
@@ -254,15 +253,14 @@
         <div class="detail-inv-header">
           <div class="detail-header-field">
             <span class="bar-label">Ngày</span>
-            <input type="date" id="detail-ngay" class="date-input">
+            <input type="date" id="detail-ngay" class="date-input" onchange="renderTodayInvoices()">
           </div>
           <div class="detail-header-field">
-            <span class="bar-label">Loại Chi Phí</span>
+            <span class="bar-label">Loại CP</span>
             <select id="detail-loai" class="bare-select" style="min-width:200px"></select>
           </div>
           <div class="detail-header-field">
-            <span class="bar-label">Công Trình</span>
-            <select id="detail-ct" class="bare-select" style="min-width:240px"></select>
+            <select id="detail-ct" class="bare-select" style="min-width:240px;max-width:100%"></select>
           </div>
         </div>
 
@@ -337,7 +335,7 @@
                 <th style="text-align:right">Số Tiền</th>
                 <th style="text-align:center">SL</th>
                 <th style="text-align:right">Thành Tiền</th>
-                <th>Nội Dung</th><th>Người TH</th><th></th>
+                <th>Nội Dung</th><th>Người TH</th>
               </tr></thead>
               <tbody id="today-inv-tbody"></tbody>
             </table>
@@ -347,15 +345,19 @@
       </div>
     </div>
 
-    <!-- ── Sub-page 2: Tất cả CP/HĐ ── -->
+    <!-- ── Sub-page 2: Tất cả CP/HĐ (gộp cả HĐ đã xóa) ── -->
     <div class="sub-page" id="sub-tat-ca">
       <div class="section-header">
         <div class="section-title"><span class="dot"></span>Tất Cả Chi Phí</div>
-        <button class="btn btn-outline" onclick="exportAllCSV()">⬇ Xuất CSV</button>
+        <button class="btn btn-outline" id="btn-export-csv" onclick="exportAllCSV()">⬇ Xuất CSV</button>
       </div>
       <div class="records-wrap">
         <div class="records-toolbar">
-          <div class="search-box">
+          <select class="filter-sel" id="f-view" onchange="switchTatCaView(this.value)">
+            <option value="active">Tất cả HĐ</option>
+            <option value="trash">🗑 Đã xóa</option>
+          </select>
+          <div class="search-box" id="tc-search-box">
             <span class="ico">🔍</span>
             <input type="text" id="search" placeholder="Tìm kiếm..." oninput="filterAndRender()">
           </div>
@@ -363,44 +365,43 @@
           <select class="filter-sel" id="f-loai" onchange="filterAndRender()"><option value="">Tất cả loại</option></select>
           <select class="filter-sel" id="f-month" onchange="filterAndRender()"><option value="">Tất cả tháng</option></select>
         </div>
-        <div style="overflow-x:auto">
-          <table class="records-table" id="all-table">
-            <thead>
-              <tr>
-                <th>Ngày</th><th>Công Trình</th><th>Loại Chi Phí</th>
-                <th class="hide-mobile">Người TH</th><th class="hide-mobile">Nhà Cung Cấp</th><th>Nội Dung</th>
-                <th style="text-align:right">Số Tiền</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="all-tbody"></tbody>
-          </table>
+        <!-- Danh sách hóa đơn hoạt động -->
+        <div id="active-inv-wrap">
+          <div style="overflow-x:auto">
+            <table class="records-table" id="all-table">
+              <thead>
+                <tr>
+                  <th>Ngày</th><th>Công Trình</th><th>Loại Chi Phí</th>
+                  <th class="hide-mobile">Người TH</th><th class="hide-mobile">Nhà Cung Cấp</th><th>Nội Dung</th>
+                  <th style="text-align:right">Số Tiền</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="all-tbody"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="pagination"></div>
         </div>
-        <div class="pagination" id="pagination"></div>
-      </div>
-    </div>
-
-    <!-- ── Sub-page 4: HĐ/CP đã xóa ── -->
-    <div class="sub-page" id="sub-da-xoa">
-      <div class="section-header">
-        <div class="section-title" style="font-size:14px"><span class="dot"></span>🗑 Hóa Đơn / Chi Phí Đã Xóa</div>
-        <div class="btn-group">
-          <button class="btn btn-outline btn-sm" onclick="trashClearAll()" style="color:var(--red)">🗑 Xóa vĩnh viễn tất cả</button>
+        <!-- HĐ/CP đã xóa (ẩn mặc định) -->
+        <div id="inline-trash-wrap" style="display:none">
+          <div style="display:flex;justify-content:flex-end;padding:8px 0">
+            <button class="btn btn-outline btn-sm" onclick="trashClearAll()" style="color:var(--red)">🗑 Xóa vĩnh viễn tất cả</button>
+          </div>
+          <div id="trash-wrap" style="display:none">
+            <div style="overflow-x:auto">
+              <table class="records-table">
+                <thead><tr>
+                  <th>Ngày</th><th>Công Trình</th><th>Loại</th>
+                  <th>Nội Dung</th><th style="text-align:right">Số Tiền</th><th></th>
+                </tr></thead>
+                <tbody id="trash-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="trash-empty" style="text-align:center;padding:20px;color:var(--ink3);font-size:13px;background:var(--paper);border:1px solid var(--line);border-radius:8px">
+            Chưa có hóa đơn nào bị xóa
+          </div>
         </div>
-      </div>
-      <div class="records-wrap" id="trash-wrap" style="display:none">
-        <div style="overflow-x:auto">
-          <table class="records-table">
-            <thead><tr>
-              <th>Ngày</th><th>Công Trình</th><th>Loại</th>
-              <th>Nội Dung</th><th style="text-align:right">Số Tiền</th><th></th>
-            </tr></thead>
-            <tbody id="trash-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-      <div id="trash-empty" style="text-align:center;padding:20px;color:var(--ink3);font-size:13px;background:var(--paper);border:1px solid var(--line);border-radius:8px">
-        Chưa có hóa đơn nào bị xóa
       </div>
     </div>
 
