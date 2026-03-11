@@ -69,7 +69,7 @@ function tbPopulateSels() {
   // Refresh name filter for KHO TỔNG bảng
   const khoFSel = document.getElementById('kho-filter-ten');
   if (khoFSel) {
-    const khoNames = [...new Set(tbData.filter(r=>r.ct===TB_KHO_TONG).map(r=>(r.ten||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi'));
+    const khoNames = [...new Set(tbData.filter(r=>!r.deletedAt&&r.ct===TB_KHO_TONG).map(r=>(r.ten||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi'));
     const khoFCur = khoFSel.value;
     khoFSel.innerHTML = '<option value="">Tất cả thiết bị</option>' +
       khoNames.map(v=>`<option value="${x(v)}" ${v===khoFCur?'selected':''}>${x(v)}</option>`).join('');
@@ -242,6 +242,7 @@ function tbRenderList() {
   const fQ  = (document.getElementById('tb-search')?.value || '').toLowerCase().trim();
   let filtered = tbData.filter(r => {
     // Bảng này chỉ hiển thị thiết bị tại công trình, không gồm KHO TỔNG
+    if (r.deletedAt) return false;
     if (r.ct === TB_KHO_TONG) return false;
     if (fCt && r.ct !== fCt) return false;
     if (fTt && r.tinhtrang !== fTt) return false;
@@ -309,6 +310,8 @@ function tbUpdateField(id, field, val) {
   const idx = tbData.findIndex(r=>r.id===id);
   if (idx<0) return;
   tbData[idx][field] = val;
+  tbData[idx].updatedAt = Date.now();
+  tbData[idx].deviceId  = DEVICE_ID;
   save('tb_v1', tbData);
   tbRenderList();
   tbRenderThongKeVon();
@@ -322,7 +325,7 @@ function tbDeleteRow(id) {
   if (!r) return;
   if (r.ct !== TB_KHO_TONG) { toast('Không thể xóa thiết bị ở công trình!', 'error'); return; }
   if (!confirm('Xóa thiết bị này khỏi Kho Tổng?')) return;
-  tbData = tbData.filter(rec=>rec.id!==id);
+  tbData = softDeleteRecord(tbData, id);
   save('tb_v1', tbData);
   tbRenderList();
   tbRenderThongKeVon();
@@ -417,13 +420,15 @@ function tbSaveEdit(id) {
 
   const remaining = oldSL - newSL;
 
-  // Xóa record gốc
-  tbData = tbData.filter(rec => rec.id !== id);
+  // Soft-delete record gốc (không xóa cứng để sync hoạt động đúng)
+  tbData = softDeleteRecord(tbData, id);
 
   // Thêm/cộng dồn số lượng chuyển đi vào newCT
-  const destExist = tbData.find(rec => rec.ct === newCT && rec.ten === r.ten && rec.tinhtrang === newTT);
+  const destExist = tbData.find(rec => !rec.deletedAt && rec.ct === newCT && rec.ten === r.ten && rec.tinhtrang === newTT);
   if (destExist) {
-    destExist.soluong = (destExist.soluong || 0) + newSL;
+    destExist.soluong  = (destExist.soluong || 0) + newSL;
+    destExist.updatedAt = Date.now();
+    destExist.deviceId  = DEVICE_ID;
     if (newNguoi) destExist.nguoi = newNguoi;
     if (newGhichu) destExist.ghichu = newGhichu;
     destExist.ngay = ngay;
@@ -437,9 +442,11 @@ function tbSaveEdit(id) {
 
   // Phần còn lại → KHO TỔNG
   if (remaining > 0) {
-    const khoExist = tbData.find(rec => rec.ct === TB_KHO_TONG && rec.ten === r.ten);
+    const khoExist = tbData.find(rec => !rec.deletedAt && rec.ct === TB_KHO_TONG && rec.ten === r.ten);
     if (khoExist) {
-      khoExist.soluong = (khoExist.soluong || 0) + remaining;
+      khoExist.soluong   = (khoExist.soluong || 0) + remaining;
+      khoExist.updatedAt = Date.now();
+      khoExist.deviceId  = DEVICE_ID;
       khoExist.ngay = ngay;
     } else {
       tbData.push({
@@ -464,6 +471,7 @@ function tbExportCSV() {
   const fCt = document.getElementById('tb-filter-ct')?.value||'';
   const fTt = document.getElementById('tb-filter-tt')?.value||'';
   let data = tbData.filter(r=>{
+    if(r.deletedAt) return false;
     if(fCt && r.ct!==fCt) return false;
     if(fTt && r.tinhtrang!==fTt) return false;
     return true;
@@ -480,13 +488,15 @@ function tbThuHoi(id) {
   if (r.ct === TB_KHO_TONG) { toast('Thiết bị này đã ở KHO TỔNG!', 'error'); return; }
   if (!confirm(`Thu hồi "${r.ten}" (SL: ${r.soluong||0}) về KHO TỔNG?`)) return;
 
-  const khoIdx = tbData.findIndex(rec => rec.ct === TB_KHO_TONG && rec.ten === r.ten);
+  const khoIdx = tbData.findIndex(rec => !rec.deletedAt && rec.ct === TB_KHO_TONG && rec.ten === r.ten);
   if (khoIdx >= 0) {
-    tbData[khoIdx].soluong = (tbData[khoIdx].soluong || 0) + (r.soluong || 0);
+    tbData[khoIdx].soluong   = (tbData[khoIdx].soluong || 0) + (r.soluong || 0);
+    tbData[khoIdx].updatedAt = Date.now();
+    tbData[khoIdx].deviceId  = DEVICE_ID;
     tbData[khoIdx].ngay = today();
   } else {
     tbData.push({
-      id: Date.now() + '_' + Math.random().toString(36).slice(2),
+      id: uuid(), createdAt: Date.now(), updatedAt: Date.now(), deletedAt: null, deviceId: DEVICE_ID,
       ct: TB_KHO_TONG,
       ten: r.ten,
       soluong: r.soluong || 0,
@@ -496,7 +506,7 @@ function tbThuHoi(id) {
       ngay: today()
     });
   }
-  tbData = tbData.filter(rec => rec.id !== id);
+  tbData = softDeleteRecord(tbData, id);
   save('tb_v1', tbData);
   tbPopulateSels();
   tbRenderList();
@@ -515,6 +525,7 @@ function renderKhoTong() {
 
   const fTen = document.getElementById('kho-filter-ten')?.value || '';
   let filtered = tbData.filter(r => {
+    if (r.deletedAt) return false;
     if (r.ct !== TB_KHO_TONG) return false;
     if (fTen && r.ten !== fTen) return false;
     return true;
@@ -570,6 +581,7 @@ function tbRenderThongKeVon() {
   const fTen = document.getElementById('tk-filter-ten')?.value || '';
   const map = {};
   tbData.forEach(r => {
+    if (r.deletedAt) return;
     if (!r.ten) return;
     if (!map[r.ten]) map[r.ten] = { ten: r.ten, total: 0, kho: 0, cts: {} };
     const sl = r.soluong || 0;

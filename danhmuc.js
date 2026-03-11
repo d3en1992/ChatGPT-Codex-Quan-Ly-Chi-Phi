@@ -591,7 +591,7 @@ function delUngRecord(id) {
   const idx = ungRecords.findIndex(r=>String(r.id)===String(id));
   if(idx<0) return;
   if(!confirm('Hủy bản ghi tiền ứng này?\n(Lịch sử sẽ được giữ lại với trạng thái "Đã hủy")')) return;
-  ungRecords[idx] = { ...ungRecords[idx], cancelled: true };
+  ungRecords[idx] = { ...ungRecords[idx], cancelled: true, updatedAt: Date.now(), deviceId: DEVICE_ID };
   save('ung_v1',ungRecords); buildUngFilters(); filterAndRenderUng(); _refreshAllTabs();
   toast('Đã hủy bản ghi (lịch sử vẫn được lưu)');
 }

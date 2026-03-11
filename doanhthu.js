@@ -521,8 +521,8 @@ function renderThuTable() {
   const badge = document.getElementById('thu-count-badge');
   if (!tbody) return;
 
-  // Lọc theo năm đang chọn (activeYear)
-  const filtered = thuRecords.filter(r => inActiveYear(r.ngay))
+  // Lọc theo năm đang chọn (activeYear), loại bỏ soft-deleted
+  const filtered = thuRecords.filter(r => !r.deletedAt && inActiveYear(r.ngay))
     .sort((a,b) => b.ngay.localeCompare(a.ngay));
 
   if (badge) badge.textContent = filtered.length ? `(${filtered.length} đợt)` : '';
@@ -548,7 +548,10 @@ function renderThuTable() {
 
 function delThuRecord(id) {
   if (!confirm('Xóa bản ghi thu tiền này?')) return;
-  thuRecords = thuRecords.filter(r => String(r.id) !== String(id));
+  const idx = thuRecords.findIndex(r => String(r.id) === String(id));
+  if (idx < 0) return;
+  const now = Date.now();
+  thuRecords[idx] = { ...thuRecords[idx], deletedAt: now, updatedAt: now, deviceId: DEVICE_ID };
   save('thu_v1', thuRecords);
   renderThuTable();
   renderDashboard();
