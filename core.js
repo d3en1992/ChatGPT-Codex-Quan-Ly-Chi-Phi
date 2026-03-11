@@ -602,11 +602,13 @@ function expandCC(arr) {
 function compressUng(arr) {
   return (arr||[]).map(o=>{const r={i:o.id,a:o.updatedAt,d:o.ngay,t:o.tp||o.ncc||'',c:o.congtrinh,p:o.tien||0,n:o.nd||''};
     if(o.loai&&o.loai!=='thauphu')r.k=o.loai;
+    if(o.cancelled)r.cl=1;
     if(o.createdAt)r.ca=o.createdAt; if(o.deletedAt)r.da=o.deletedAt;
     if(o.deviceId)r.dv=o.deviceId; return r;});
 }
 function expandUng(arr) {
   return (arr||[]).map(o=>({id:o.i,updatedAt:o.a,ngay:o.d,tp:o.t,loai:o.k||'thauphu',congtrinh:o.c,tien:o.p||0,nd:o.n||'',
+    cancelled:o.cl?true:undefined,
     createdAt:o.ca||undefined,deletedAt:o.da||null,deviceId:o.dv||undefined}));
 }
 function compressTb(arr) {

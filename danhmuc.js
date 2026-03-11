@@ -469,13 +469,15 @@ function saveAllUngRows() {
     if(!tp&&!tien) return;
     if(!tp) { errRow++; tr.style.background='#fdecea'; return; }
     tr.style.background='';
+    const _now = Date.now();
     ungRecords.unshift({
-      id: uuid(), updatedAt: Date.now(), ngay:date,
+      id: uuid(), createdAt: _now, updatedAt: _now, deletedAt: null, deviceId: DEVICE_ID,
+      ngay: date,
       loai: (tr.querySelector('[data-f="loai"]')?.value||'thauphu'),
       tp,
-      congtrinh:(tr.querySelector('[data-f="ct"]')?.value||'').trim(),
+      congtrinh: (tr.querySelector('[data-f="ct"]')?.value||'').trim(),
       tien,
-      nd:(tr.querySelector('[data-f="nd"]')?.value||'').trim()
+      nd: (tr.querySelector('[data-f="nd"]')?.value||'').trim()
     });
     saved++;
   });
