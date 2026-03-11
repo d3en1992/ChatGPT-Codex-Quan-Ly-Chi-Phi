@@ -449,6 +449,7 @@ function dtGoSub(btn, id) {
     renderHdcTable(0);
     renderHdtpTable(0);
     renderThuTable(0);
+    renderCongNoThauPhu();
   }
 }
 
@@ -479,6 +480,7 @@ function dtPopulateSels() {
   // Refresh bảng THỐNG KÊ khi năm thay đổi
   renderHdcTable(_hdcPage);
   renderHdtpTable(_hdtpPage);
+  renderCongNoThauPhu();
 }
 
 // ── Thêm CT mới vào danh mục nếu chưa có ─────────────────────
@@ -638,7 +640,7 @@ function renderHdcTable(page) {
   tbody.innerHTML = slice.map(([ct, hd]) => {
     const tong = (hd.giaTri || 0) + (hd.giaTriphu || 0) + (hd.phatSinh || 0);
     return `<tr>
-      <td style="font-weight:600;min-width:130px">${x(ct)}</td>
+      <td style="font-weight:600;white-space:nowrap">${x(ct)}</td>
       <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap">${hd.giaTri ? fmtS(hd.giaTri) : '<span style="color:var(--ink3)">—</span>'}</td>
       <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap">${hd.giaTriphu ? fmtS(hd.giaTriphu) : '<span style="color:var(--ink3)">—</span>'}</td>
       <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap">${hd.phatSinh ? fmtS(hd.phatSinh) : '<span style="color:var(--ink3)">—</span>'}</td>
@@ -810,7 +812,7 @@ function renderThuTable(page) {
   tbody.innerHTML = slice.map(r => `
     <tr>
       <td style="white-space:nowrap;color:var(--ink3);font-size:12px">${r.ngay}</td>
-      <td style="font-weight:600">${x(r.congtrinh)}</td>
+      <td style="font-weight:600;white-space:nowrap">${x(r.congtrinh)}</td>
       <td style="text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--green);white-space:nowrap">${fmtM(r.tien)}</td>
       <td style="color:var(--ink2)">${x(r.nguoi || '—')}</td>
       <td style="color:var(--ink3);font-size:12px">${x(r.nd || '—')}</td>
@@ -959,8 +961,8 @@ function renderHdtpTable(page) {
   tbody.innerHTML = slice.map(r => {
     const tong = (r.giaTri || 0) + (r.phatSinh || 0);
     return `<tr>
-      <td style="font-weight:600;min-width:120px">${x(r.congtrinh)}</td>
-      <td style="min-width:110px">${x(r.thauphu)}</td>
+      <td style="font-weight:600;white-space:nowrap">${x(r.congtrinh)}</td>
+      <td style="white-space:nowrap">${x(r.thauphu)}</td>
       <td style="color:var(--ink3);font-size:12px;min-width:90px">${x(r.nd || '—')}</td>
       <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap">${r.giaTri ? fmtS(r.giaTri) : '<span style="color:var(--ink3)">—</span>'}</td>
       <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap">${r.phatSinh ? fmtS(r.phatSinh) : '<span style="color:var(--ink3)">—</span>'}</td>
@@ -977,6 +979,87 @@ function renderHdtpTable(page) {
   }).join('');
 
   if (pgWrap) pgWrap.innerHTML = _dtPaginationHtml(total, page, 'renderHdtpTable');
+}
+
+// ══ BẢNG CÔNG NỢ THẦU PHỤ ════════════════════════════════════
+
+// ── Render bảng Công Nợ Thầu Phụ ─────────────────────────────
+function renderCongNoThauPhu() {
+  const tbody = document.getElementById('congno-tbody');
+  const empty = document.getElementById('congno-empty');
+  if (!tbody) return;
+
+  // Gom nhóm theo key (thauphu ||| congtrinh)
+  const map = {}; // key → { thauphu, congtrinh, tongUng, count, tongHD }
+
+  // Nguồn 1: tiền ứng thầu phụ (ungRecords loai='thauphu')
+  ungRecords
+    .filter(r => r.loai === 'thauphu' && !r.deletedAt && !r.cancelled && inActiveYear(r.ngay))
+    .forEach(r => {
+      const key = (r.tp || '') + '|||' + (r.congtrinh || '');
+      if (!map[key]) map[key] = { thauphu: r.tp || '', congtrinh: r.congtrinh || '', tongUng: 0, count: 0, tongHD: 0 };
+      map[key].tongUng += (r.tien || 0);
+      map[key].count++;
+    });
+
+  // Nguồn 2: hợp đồng thầu phụ (thauPhuContracts)
+  thauPhuContracts
+    .filter(r => !r.deletedAt && _dtInYear(r.ngay))
+    .forEach(r => {
+      const key = (r.thauphu || '') + '|||' + (r.congtrinh || '');
+      if (!map[key]) map[key] = { thauphu: r.thauphu || '', congtrinh: r.congtrinh || '', tongUng: 0, count: 0, tongHD: 0 };
+      map[key].tongHD += (r.giaTri || 0) + (r.phatSinh || 0);
+    });
+
+  const rows = Object.values(map)
+    .sort((a, b) => a.thauphu.localeCompare(b.thauphu, 'vi') || a.congtrinh.localeCompare(b.congtrinh, 'vi'));
+
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  let totUng = 0, totHD = 0, totConlai = 0;
+
+  const dataRows = rows.map(row => {
+    const conlai = row.tongHD - row.tongUng;
+    totUng    += row.tongUng;
+    totHD     += row.tongHD;
+    totConlai += conlai;
+    const overdrawn    = row.tongUng > row.tongHD && row.tongHD > 0;
+    const conlaiStyle  = overdrawn
+      ? 'color:var(--red);font-weight:700'
+      : (conlai === 0 ? 'color:var(--ink3)' : '');
+    const countLabel   = row.count > 0
+      ? `<span style="color:var(--ink3);font-size:11px;margin-left:3px">(${row.count})</span>`
+      : '';
+    return `<tr>
+      <td style="font-weight:600;white-space:nowrap">${x(row.thauphu)}</td>
+      <td style="white-space:nowrap">${x(row.congtrinh)}</td>
+      <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap">
+        ${row.tongUng ? fmtS(row.tongUng) : '<span style="color:var(--ink3)">—</span>'}${countLabel}
+      </td>
+      <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap">
+        ${row.tongHD ? fmtS(row.tongHD) : '<span style="color:var(--ink3)">—</span>'}
+      </td>
+      <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap;${conlaiStyle}">
+        ${fmtS(conlai)}
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Hàng tổng cộng
+  const footerConlaiStyle = totUng > totHD && totHD > 0 ? 'color:var(--red)' : '';
+  const footerRow = `<tr style="border-top:2px solid var(--line);font-weight:700;background:var(--panel)">
+    <td colspan="2" style="padding:8px 12px;color:var(--ink2)">Tổng cộng</td>
+    <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap;padding:8px 10px">${fmtS(totUng)}</td>
+    <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap;padding:8px 10px">${fmtS(totHD)}</td>
+    <td style="text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap;padding:8px 10px;${footerConlaiStyle}">${fmtS(totConlai)}</td>
+  </tr>`;
+
+  tbody.innerHTML = dataRows + footerRow;
 }
 
 // ══ BẢNG LÃI/LỖ (Dashboard) ═══════════════════════════════════
