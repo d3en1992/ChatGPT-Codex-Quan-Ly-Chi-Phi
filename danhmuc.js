@@ -348,10 +348,11 @@ function rebuildEntrySelects() {
       sel.innerHTML=`<option value="">-- Chọn --</option>`+cats.loaiChiPhi.map(v=>`<option value="${x(v)}" ${v===cur?'selected':''}>${x(v)}</option>`).join('');
     }
   });
-  // rebuild datalists for nguoi and ncc
+  // rebuild datalists for nguoi (kết hợp nguoiTH + congNhan + thauPhu) và ncc
+  const _nguoiCombo = [...new Set([...cats.nguoiTH,...cats.congNhan,...cats.thauPhu])].sort();
   document.querySelectorAll('#entry-tbody [data-f="nguoi"]').forEach(inp=>{
     const dl=document.getElementById(inp.getAttribute('list'));
-    if(dl) dl.innerHTML=cats.nguoiTH.map(v=>`<option value="${x(v)}">`).join('');
+    if(dl) dl.innerHTML=_nguoiCombo.map(v=>`<option value="${x(v)}">`).join('');
   });
   document.querySelectorAll('#entry-tbody [data-f="ncc"]').forEach(inp=>{
     const dl=document.getElementById(inp.getAttribute('list'));
@@ -487,6 +488,24 @@ function saveAllUngRows() {
   });
   if(errRow>0) { toast(`${errRow} dòng thiếu Thầu Phụ/NCC (đánh dấu đỏ)!`,'error'); return; }
   if(saved===0) { toast('Không có dòng hợp lệ!','error'); return; }
+
+  // ── Tự động thêm tên mới vào đúng danh mục ──────────────────
+  let ungCatChanged = false;
+  document.querySelectorAll('#ung-tbody tr').forEach(tr => {
+    const loai = tr.querySelector('[data-f="loai"]')?.value || 'thauphu';
+    const tp = (tr.querySelector('[data-f="tp"]')?.value || '').trim().toUpperCase();
+    if (!tp) return;
+    if (loai === 'congnhan') {
+      if (!cats.congNhan.includes(tp)) { cats.congNhan.push(tp); ungCatChanged = true; }
+    } else {
+      if (!cats.thauPhu.includes(tp)) { cats.thauPhu.push(tp); ungCatChanged = true; }
+    }
+  });
+  if (ungCatChanged) {
+    cats.congNhan.sort(); cats.thauPhu.sort();
+    saveCats('congNhan'); saveCats('thauPhu');
+  }
+
   save('ung_v1', ungRecords);
   toast(`✅ Đã lưu ${saved} tiền ứng!`,'success');
   initUngTable(4);

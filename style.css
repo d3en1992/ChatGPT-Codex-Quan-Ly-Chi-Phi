@@ -1166,15 +1166,15 @@ body { overscroll-behavior-y: none; }
   white-space: nowrap;
   font-size: 12px; font-weight: 600;
 }
-#tb-list-table .tb-name-col { width: 160px; }
+#tb-list-table .tb-name-col { width: 224px; } /* +40% từ 160px */
 
 /* 7. Kho Tổng: không sticky, cố định layout */
 #kho-list-table { table-layout: fixed; }
-#kho-list-table .tb-name-col { width: 190px; }
+#kho-list-table .tb-name-col { width: 266px; } /* +40% từ 190px */
 
 /* 8. Thống Kê: không sticky, cố định layout */
 #tb-vonke-table { table-layout: fixed; }
-#tb-vonke-table .tb-name-col { width: 190px; }
+#tb-vonke-table .tb-name-col { width: 266px; } /* +40% từ 190px */
 
 /* Mobile: tắt sticky bảng nhập */
 @media (max-width: 600px) {

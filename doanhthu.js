@@ -327,14 +327,35 @@ function _dbTBByCT() {
   const wrap = document.getElementById('db-tb-ct');
   if (!wrap) return;
 
-  const allTB = tbData.filter(t => t.ct !== TB_KHO_TONG);
+  // Chỉ thiết bị chưa xóa, không phải KHO TỔNG
+  const allTB = tbData.filter(t => !t.deletedAt && t.ct !== TB_KHO_TONG);
+  // Thiết bị trong KHO TỔNG (chưa xóa)
+  const khoTB = tbData.filter(t => !t.deletedAt && t.ct === TB_KHO_TONG);
 
-  if (!allTB.length) {
+  if (!allTB.length && !khoTB.length) {
     wrap.innerHTML = '<div class="db-empty">Chưa có thiết bị</div>';
     return;
   }
 
   if (!selectedCT) {
+    // Tổng KHO TỔNG
+    const khoTotal = khoTB.reduce((s, t) => s + (t.soluong||0), 0);
+    const khoHd = khoTB.filter(t=>t.tinhtrang==='Đang hoạt động').reduce((s,t)=>s+(t.soluong||0),0);
+    const khoLau = khoTB.filter(t=>t.tinhtrang==='Hoạt động lâu').reduce((s,t)=>s+(t.soluong||0),0);
+    const khoSC = khoTB.filter(t=>t.tinhtrang==='Cần sửa chữa').reduce((s,t)=>s+(t.soluong||0),0);
+
+    const khoRow = khoTotal > 0
+      ? `<div style="padding:10px 0;border-bottom:2px solid var(--gold);margin-bottom:4px">
+          <div style="font-weight:800;color:var(--gold);margin-bottom:6px;font-size:13px">🏪 KHO TỔNG</div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
+            <span style="color:var(--ink3)">Tổng: <b style="color:var(--ink);font-size:14px">${khoTotal}</b></span>
+            <span style="color:var(--green)">Đang hoạt động: <b>${khoHd}</b></span>
+            <span style="color:var(--gold)">Hoạt động lâu: <b>${khoLau}</b></span>
+            <span style="color:var(--red)">Cần sửa chữa: <b>${khoSC}</b></span>
+          </div>
+        </div>`
+      : '';
+
     const byCT = {};
     allTB.forEach(t => {
       const ct = t.ct || '(Không rõ)';
@@ -347,7 +368,7 @@ function _dbTBByCT() {
     });
 
     const sorted = Object.entries(byCT).sort((a,b) => a[0].localeCompare(b[0],'vi'));
-    wrap.innerHTML = sorted.map(([ct, s]) =>
+    const ctRows = sorted.map(([ct, s]) =>
       `<div style="padding:10px 0;border-bottom:1px solid var(--line)">
         <div style="font-weight:700;color:var(--ink);margin-bottom:6px">${x(ct)}</div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
@@ -358,6 +379,8 @@ function _dbTBByCT() {
         </div>
       </div>`
     ).join('');
+
+    wrap.innerHTML = khoRow + (ctRows || '<div class="db-empty">Chưa có thiết bị tại công trình</div>');
   } else {
     const filtered = allTB
       .filter(t => t.ct === selectedCT)

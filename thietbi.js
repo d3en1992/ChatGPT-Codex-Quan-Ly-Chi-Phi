@@ -147,13 +147,14 @@ function tbAddRow(data, num) {
     dl.innerHTML = tbGetNames().map(n=>`<option value="${x(n)}">`).join('');
     document.body.appendChild(dl);
   }
-  // Datalist nguoi
-  if (!document.getElementById('tb-nguoi-dl')) {
-    const dl = document.createElement('datalist');
-    dl.id = 'tb-nguoi-dl';
-    dl.innerHTML = cats.nguoiTH.map(n=>`<option value="${x(n)}">`).join('');
-    document.body.appendChild(dl);
+  // Datalist nguoi: kết hợp nguoiTH + congNhan + thauPhu
+  let _tbNguoiDl = document.getElementById('tb-nguoi-dl');
+  if (!_tbNguoiDl) {
+    _tbNguoiDl = document.createElement('datalist');
+    _tbNguoiDl.id = 'tb-nguoi-dl';
+    document.body.appendChild(_tbNguoiDl);
   }
+  _tbNguoiDl.innerHTML = [...new Set([...cats.nguoiTH,...cats.congNhan,...cats.thauPhu])].sort().map(n=>`<option value="${x(n)}">`).join('');
 }
 
 function tbRenum() {
@@ -212,7 +213,7 @@ function tbSave() {
   });
 
   save('tb_v1', tbData);
-  // Sync tên mới vào cats.tbTen để hiện trong Danh Mục
+  // Sync tên thiết bị mới vào cats.tbTen
   if (cats && cats.tbTen) {
     let catChanged = false;
     rows.forEach(row => {
@@ -220,6 +221,15 @@ function tbSave() {
     });
     if (catChanged) { try { saveCats('tbTen'); } catch(e) {} }
   }
+  // Tự động thêm tên Người TH mới vào cats.nguoiTH
+  let tbNguoiChanged = false;
+  rows.forEach(row => {
+    const nguoi = (row.nguoi||'').trim().toUpperCase();
+    if (nguoi && !cats.nguoiTH.includes(nguoi) && !cats.congNhan.includes(nguoi) && !cats.thauPhu.includes(nguoi)) {
+      cats.nguoiTH.push(nguoi); tbNguoiChanged = true;
+    }
+  });
+  if (tbNguoiChanged) { cats.nguoiTH.sort(); try { saveCats('nguoiTH'); } catch(e) {} }
   tbRefreshNameDl();
   tbPopulateSels();
   tbRenderList();

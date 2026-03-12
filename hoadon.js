@@ -51,7 +51,7 @@ function addRow(d={}) {
     <td><input class="cell-input" data-f="nd" value="${x(d.nd||'')}" placeholder="Nội dung..."></td>
     <td>
       <input class="cell-input" data-f="nguoi" list="${dlNguoi}" value="${x(d.nguoi||'')}" placeholder="Nhập hoặc chọn...">
-      <datalist id="${dlNguoi}">${cats.nguoiTH.map(v=>`<option value="${x(v)}">`).join('')}</datalist>
+      <datalist id="${dlNguoi}">${[...new Set([...cats.nguoiTH,...cats.congNhan,...cats.thauPhu])].sort().map(v=>`<option value="${x(v)}">`).join('')}</datalist>
     </td>
     <td>
       <input class="cell-input" data-f="ncc" list="${dlNcc}" value="${x(d.ncc||'')}" placeholder="Nhập hoặc chọn...">
@@ -318,6 +318,25 @@ function _doSaveRows(rows) {
     tr.style.background = '#f0fff4';
   });
 
+  // ── Tự động thêm tên mới vào đúng danh mục ──────────────────
+  let catChanged = false;
+  rows.forEach(({payload}) => {
+    const nguoi = (payload.nguoi||'').trim().toUpperCase();
+    if (nguoi && !cats.nguoiTH.includes(nguoi) && !cats.congNhan.includes(nguoi) && !cats.thauPhu.includes(nguoi)) {
+      cats.nguoiTH.push(nguoi);
+      catChanged = true;
+    }
+    const ncc = (payload.ncc||'').trim().toUpperCase();
+    if (ncc && !cats.nhaCungCap.includes(ncc)) {
+      cats.nhaCungCap.push(ncc);
+      catChanged = true;
+    }
+  });
+  if (catChanged) {
+    cats.nguoiTH.sort(); cats.nhaCungCap.sort();
+    saveCats('nguoiTH'); saveCats('nhaCungCap');
+  }
+
   save('inv_v3', invoices);
   buildYearSelect(); updateTop();
 
@@ -360,6 +379,15 @@ function _initDetailFormSelects() {
   ctSel.innerHTML = '<option value="">-- Chọn Công Trình --</option>' +
     cats.congTrinh.filter(v => _ctInActiveYear(v)).map(v => `<option value="${x(v)}">${x(v)}</option>`).join('');
 
+  // Đảm bảo datalist gợi ý Người TH cho form chi tiết (nguoiTH + congNhan + thauPhu)
+  let nguoiCombodl = document.getElementById('dl-nguoi-combo');
+  if (!nguoiCombodl) {
+    nguoiCombodl = document.createElement('datalist');
+    nguoiCombodl.id = 'dl-nguoi-combo';
+    document.body.appendChild(nguoiCombodl);
+  }
+  nguoiCombodl.innerHTML = [...new Set([...cats.nguoiTH,...cats.congNhan,...cats.thauPhu])].sort().map(v=>`<option value="${x(v)}">`).join('');
+
   // PHẦN 3: Format #detail-footer-ck (số tiền → hàng nghìn, % → giữ nguyên)
   const footerCk = document.getElementById('detail-footer-ck');
   if(footerCk && !footerCk.dataset.fmtInit) {
@@ -394,7 +422,7 @@ function renderDetailRowHTML(d, num) {
       value="${d.dongia?numFmt(d.dongia):''}" placeholder="0" inputmode="decimal"></td>
     <td><input class="cell-input" data-f="ck" value="${x(ckFmt)}" placeholder="vd: 5% hoặc 50000"></td>
     <td class="tt-cell" data-f="thtien"></td>
-    <td style="padding:0"><input class="cell-input" data-f="nguoith" value="${x(d.nguoith||'')}" placeholder="—" style="min-width:90px"></td>
+    <td style="padding:0"><input class="cell-input" data-f="nguoith" list="dl-nguoi-combo" value="${x(d.nguoith||'')}" placeholder="—" style="min-width:90px"></td>
     <td><button class="del-btn" onclick="delDetailRow(this)">✕</button></td>
   `;
 }
@@ -561,6 +589,12 @@ function saveDetailInvoice() {
     inv.id = uuid(); inv.createdAt = Date.now(); inv.deletedAt = null;
     invoices.unshift(inv);
     toast('✅ Đã lưu hóa đơn chi tiết!','success');
+  }
+
+  // ── Tự động thêm tên Người TH mới vào cats.nguoiTH ──────────
+  const nguoiDetail = (detailNguoi||'').trim().toUpperCase();
+  if (nguoiDetail && !cats.nguoiTH.includes(nguoiDetail) && !cats.congNhan.includes(nguoiDetail) && !cats.thauPhu.includes(nguoiDetail)) {
+    cats.nguoiTH.push(nguoiDetail); cats.nguoiTH.sort(); saveCats('nguoiTH');
   }
 
   save('inv_v3', invoices);

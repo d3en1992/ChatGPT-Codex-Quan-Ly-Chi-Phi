@@ -61,11 +61,12 @@ function weekLabel(sundayISO){
 // iso() vẫn giữ để dùng chỗ khác nếu cần
 function iso(d){ return d.toISOString().split('T')[0]; }
 
-// ─── all worker names for autocomplete ──────────────────────────
+// ─── all worker names for autocomplete (Chấm Công: chỉ dùng cats.congNhan) ────
 function ccAllNames(){
   const s=new Set();
   ccData.filter(w=>!w.deletedAt).forEach(w=>w.workers.forEach(wk=>{ if(wk.name) s.add(wk.name); }));
-  cats.nguoiTH.forEach(n=>s.add(n));
+  // Tab Chấm Công chỉ gợi ý tên từ danh mục Công Nhân
+  (cats.congNhan||[]).forEach(n=>s.add(n));
   return [...s].sort();
 }
 
@@ -354,17 +355,15 @@ function rebuildCCCategories() {
   });
   if (addedCTs > 0) { cats.congTrinh.sort(); localStorage.setItem('cat_ct', JSON.stringify(cats.congTrinh)); }
 
-  // Tự động thêm tên công nhân vào danh mục Người TH và Công Nhân
+  // Tự động thêm tên công nhân vào danh mục Công Nhân (KHÔNG thêm vào Người TH)
   const allWorkerNames = [...new Set(
     ccData.flatMap(w => (w.workers || []).map(wk => wk.name).filter(Boolean))
   )];
-  let addedNames = 0;
+  let cnAdded = 0;
   allWorkerNames.forEach(name => {
-    if (!cats.nguoiTH.includes(name)) { cats.nguoiTH.push(name); addedNames++; }
-    if (!cats.congNhan.includes(name)) cats.congNhan.push(name);
+    if (!cats.congNhan.includes(name)) { cats.congNhan.push(name); cnAdded++; }
   });
-  if (addedNames > 0) { cats.nguoiTH.sort(); localStorage.setItem('cat_nguoi', JSON.stringify(cats.nguoiTH)); }
-  if (cats.congNhan.length > 0) { cats.congNhan.sort(); localStorage.setItem('cat_cn', JSON.stringify(cats.congNhan)); }
+  if (cnAdded > 0 || cats.congNhan.length > 0) { cats.congNhan.sort(); localStorage.setItem('cat_cn', JSON.stringify(cats.congNhan)); }
 
   // Tự động thêm tên TP/NCC từ tiền ứng vào danh mục Thầu Phụ (chỉ loai thauphu)
   const allTPs = [...new Set((typeof ungRecords !== 'undefined' ? ungRecords : [])
@@ -376,7 +375,7 @@ function rebuildCCCategories() {
   });
   if (addedTPs > 0) { cats.thauPhu.sort(); localStorage.setItem('cat_tp', JSON.stringify(cats.thauPhu)); }
 
-  return { cts: addedCTs, names: addedNames, tps: addedTPs };
+  return { cts: addedCTs, names: cnAdded, tps: addedTPs };
 }
 
 function saveCCWeek(){
@@ -426,9 +425,10 @@ function saveCCWeek(){
   let cnUpdated=false;
   workers.forEach(wk=>{
     if(!wk.name) return;
-    const known=cats.congNhan.find(n=>n.toLowerCase()===wk.name.toLowerCase());
-    if(!known){ cats.congNhan.push(wk.name); cnUpdated=true; }
-    if(wk.role && !cnRoles[wk.name]){ cnRoles[wk.name]=wk.role; cnUpdated=true; }
+    const uname = wk.name.trim().toUpperCase();
+    const known=cats.congNhan.find(n=>n.toUpperCase()===uname);
+    if(!known){ cats.congNhan.push(uname); cnUpdated=true; }
+    if(wk.role && !cnRoles[uname]){ cnRoles[uname]=wk.role; cnUpdated=true; }
   });
   if(cnUpdated){ cats.congNhan.sort(); save('cat_cn',cats.congNhan); save('cat_cn_roles',cnRoles); }
 
